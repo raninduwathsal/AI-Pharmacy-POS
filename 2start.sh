@@ -7,7 +7,7 @@ if ! docker ps -a | grep -q pharmacy-mysql; then
         -e MYSQL_ROOT_PASSWORD=root \
         -e MYSQL_DATABASE=pharmacy_pos \
         -p 3306:3306 \
-        mysql:5.7
+        mysql:8.4
 else
     if ! docker ps | grep -q pharmacy-mysql; then
         echo "Starting existing MySQL container..."
@@ -27,14 +27,14 @@ echo "Starting Backend Server..."
 cd backend
 # Install dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
-    /tmp/fnm/fnm exec --using=20 npm install
+    fnm exec --using=20 npm install
 fi
 
 echo "Setting up database schema and seeding..."
-/tmp/fnm/fnm exec --using=20 npx tsx src/seed.ts
+fnm exec --using=20 npx tsx src/seed.ts
 
 echo "Running Backend on port 5000..."
-/tmp/fnm/fnm exec --using=20 npx tsx src/server.ts &
+fnm exec --using=20 npx tsx src/server.ts &
 BACKEND_PID=$!
 
 # Start Frontend
@@ -42,11 +42,12 @@ echo "Starting Frontend App..."
 cd ../frontend
 # Install dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
-    /tmp/fnm/fnm exec --using=20 npm install
+    fnm exec --using=20 npm install
 fi
 
 echo "Running Frontend on port 5173..."
-/tmp/fnm/fnm exec --using=20 npm run dev &
+# Start Vite with --host to expose the server to all network interfaces
+fnm exec --using=20 npm run dev -- --host &
 FRONTEND_PID=$!
 
 echo "Pharmacy POS system is running."

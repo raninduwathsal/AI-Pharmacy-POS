@@ -75,7 +75,8 @@ app.post('/api/chat/send', async (req, res) => {
             try {
                 // Forward the query to the POS inventory semantic check if needed, or just mock it.
                 // We will do a generic cross-api mock GET here to the main POS backend.
-                const response = await fetch(`http://localhost:3000/api/inventory/safe-check?q=${encodeURIComponent(content)}`);
+                const posBackendUrl = process.env.POS_BACKEND_URL || 'http://127.0.0.1:5000';
+                const response = await fetch(`${posBackendUrl}/api/inventory/safe-check?q=${encodeURIComponent(content)}`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.in_stock) {

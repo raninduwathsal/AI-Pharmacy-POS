@@ -10,6 +10,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Check, ChevronsUpDown, Trash2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createId } from "@/lib/id";
 import {
     Select,
     SelectContent,
@@ -79,10 +80,12 @@ export default function PosTab({ currency = '$' }: { currency?: string }) {
 
     useEffect(() => {
         // Connect to Socket.io for Real-time AI Webhooks
-        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const socketUrl = backendUrl.replace('/api', '');
+        const backendUrl = import.meta.env.VITE_API_URL || '/api';
+        const socketUrl = backendUrl.startsWith('http')
+            ? backendUrl.replace(/\/api\/?$/, '')
+            : undefined;
 
-        socketRef.current = io(socketUrl);
+        socketRef.current = socketUrl ? io(socketUrl) : io();
 
         socketRef.current.on('new_ai_scan_received', (data: any) => {
             console.log("Real-time AI Scan Received:", data);
@@ -98,7 +101,7 @@ export default function PosTab({ currency = '$' }: { currency?: string }) {
 
         // Add 1 default empty row to start
         if (cart.length === 0) {
-            setCart([{ id: crypto.randomUUID(), product_id: null, product_name: "", quantity: 1, unit_price: 0, frequency: "" }]);
+            setCart([{ id: createId(), product_id: null, product_name: "", quantity: 1, unit_price: 0, frequency: "" }]);
         }
 
         return () => {
@@ -135,7 +138,7 @@ export default function PosTab({ currency = '$' }: { currency?: string }) {
     };
 
     const addCartRow = () => {
-        setCart([...cart, { id: crypto.randomUUID(), product_id: null, product_name: "", quantity: 1, unit_price: 0, frequency: "" }]);
+        setCart([...cart, { id: createId(), product_id: null, product_name: "", quantity: 1, unit_price: 0, frequency: "" }]);
     };
 
     const selectProduct = (rowId: string, prod: ProductSearchResult) => {
@@ -166,7 +169,7 @@ export default function PosTab({ currency = '$' }: { currency?: string }) {
     const handleVerifyAiData = () => {
         // Only transfer verified (mapped) items to cart
         const verifiedItems = aiLines.filter(line => line.matched_product_id !== null).map(line => ({
-            id: crypto.randomUUID(),
+            id: createId(),
             product_id: line.matched_product_id!,
             product_name: line.matched_product_name || line.medicine_name_raw,
             quantity: line.total_amount || 1,

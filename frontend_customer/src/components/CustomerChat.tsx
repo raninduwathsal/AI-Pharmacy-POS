@@ -1,4 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
+import { apiUrl } from '../lib/api';
+
+const createSessionId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+
+    const random = Math.random().toString(36).slice(2);
+    return `session-${Date.now()}-${random}`;
+};
 
 interface Message {
     message_id?: number;
@@ -10,7 +20,7 @@ interface Message {
 export default function CustomerChat() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputStr, setInputStr] = useState('');
-    const [sessionId] = useState(() => crypto.randomUUID());
+    const [sessionId] = useState(createSessionId);
     const [customerId] = useState(1); // Hardcoded mock user ID 1
     const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
@@ -23,7 +33,7 @@ export default function CustomerChat() {
     useEffect(() => {
         const fetchMsgs = async () => {
             try {
-                const res = await fetch(`http://localhost:4000/api/chat/sessions/${sessionId}/messages`);
+                const res = await fetch(apiUrl(`/chat/sessions/${sessionId}/messages`));
                 if (res.ok) {
                     const data = await res.json();
                     if (data.length > messages.length) {
@@ -48,7 +58,7 @@ export default function CustomerChat() {
         setMessages(prev => [...prev, { sender: 'Customer', content: userMsg }]);
 
         try {
-            const res = await fetch('http://localhost:4000/api/chat/send', {
+            const res = await fetch(apiUrl('/chat/send'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -74,7 +84,7 @@ export default function CustomerChat() {
     const handleBooking = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const res = await fetch('http://localhost:4000/api/appointments/book', {
+            const res = await fetch(apiUrl('/appointments/book'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -98,7 +108,7 @@ export default function CustomerChat() {
     const handleOptOut = async () => {
         if (!confirm('This action will permanently purge your identifiable data. Proceed?')) return;
         try {
-            await fetch(`http://localhost:4000/api/customers/${customerId}/opt-out`, { method: 'DELETE' });
+            await fetch(apiUrl(`/customers/${customerId}/opt-out`), { method: 'DELETE' });
             alert("Account anonymized.");
             window.location.reload();
         } catch (e) { console.error(e); }

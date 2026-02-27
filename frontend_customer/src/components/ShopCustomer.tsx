@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiUrl } from '../lib/api';
 
 interface Product {
     product_id: number;
@@ -32,14 +33,14 @@ export default function ShopCustomer() {
 
     const fetchProducts = async () => {
         try {
-            const res = await fetch('http://localhost:4000/api/shop/products');
+            const res = await fetch(apiUrl('/shop/products'));
             if (res.ok) setProducts(await res.json());
         } catch (e) { console.error(e); }
     };
 
     const fetchStatus = async () => {
         try {
-            const res = await fetch('http://localhost:4000/api/shop/status');
+            const res = await fetch(apiUrl('/shop/status'));
             if (res.ok) {
                 const data = await res.json();
                 setIsPreorder(data.is_preorder_only);
@@ -50,7 +51,7 @@ export default function ShopCustomer() {
 
     const fetchCart = async () => {
         try {
-            const res = await fetch(`http://localhost:4000/api/cart/${customerId}`);
+            const res = await fetch(apiUrl(`/cart/${customerId}`));
             if (res.ok) setCart(await res.json());
         } catch (e) { console.error(e); }
     };
@@ -65,7 +66,7 @@ export default function ShopCustomer() {
                 setCart([...cart, { product_id: product.product_id, name: product.name, price: product.price, quantity: 1 }]);
             }
 
-            await fetch('http://localhost:4000/api/cart/add', {
+            await fetch(apiUrl('/cart/add'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ customer_id: customerId, product_id: product.product_id, quantity: 1 })
@@ -77,14 +78,14 @@ export default function ShopCustomer() {
     const removeFromCart = async (cartItemId: number) => {
         try {
             setCart(cart.filter(c => c.cart_item_id !== cartItemId));
-            await fetch(`http://localhost:4000/api/cart/remove/${cartItemId}`, { method: 'DELETE' });
+            await fetch(apiUrl(`/cart/remove/${cartItemId}`), { method: 'DELETE' });
         } catch (e) { console.error(e); }
     };
 
     const handleCheckout = async () => {
         if (cart.length === 0) return;
         try {
-            const res = await fetch('http://localhost:4000/api/orders/checkout', {
+            const res = await fetch(apiUrl('/orders/checkout'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ customer_id: customerId })

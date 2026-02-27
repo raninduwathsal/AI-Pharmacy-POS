@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { createId } from "@/lib/id";
 
 interface Supplier { supplier_id: number; name: string; }
 interface ProductSearchResult { product_id: number; name: string; measure_unit: string; }
@@ -82,7 +83,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
 
     const addRow = () => {
         setBatches([...batches, {
-            id: crypto.randomUUID(), product_id: null, product_name: "", batch_number: "",
+            id: createId(), product_id: null, product_name: "", batch_number: "",
             expiry_date: "", location: "", purchased_quantity: 0, bonus_quantity: 0, unit_cost: 0
         }]);
     };

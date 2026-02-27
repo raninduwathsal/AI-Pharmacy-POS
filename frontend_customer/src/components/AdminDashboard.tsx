@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiUrl } from '../lib/api';
 
 export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState<'chats' | 'appointments' | 'logistics' | 'products'>('chats');
@@ -27,7 +28,7 @@ export default function AdminDashboard() {
         if (!selectedSession) return;
         const fetchMsgs = async () => {
             try {
-                const res = await fetch(`http://localhost:4000/api/admin/chat-sessions/${selectedSession}/messages`);
+                const res = await fetch(apiUrl(`/admin/chat-sessions/${selectedSession}/messages`));
                 if (res.ok) {
                     const data = await res.json();
                     setChatMessages(data);
@@ -41,28 +42,28 @@ export default function AdminDashboard() {
 
     const fetchSessions = async () => {
         try {
-            const res = await fetch('http://localhost:4000/api/admin/chat-sessions');
+            const res = await fetch(apiUrl('/admin/chat-sessions'));
             if (res.ok) setSessions(await res.json());
         } catch (e) { console.error(e); }
     };
 
     const fetchAppointments = async () => {
         try {
-            const res = await fetch('http://localhost:4000/api/admin/appointments');
+            const res = await fetch(apiUrl('/admin/appointments'));
             if (res.ok) setAppointments(await res.json());
         } catch (e) { console.error(e); }
     };
 
     const fetchOrders = async () => {
         try {
-            const res = await fetch('http://localhost:4000/api/orders');
+            const res = await fetch(apiUrl('/orders'));
             if (res.ok) setOrders(await res.json());
         } catch (e) { console.error(e); }
     };
 
     const fetchProducts = async () => {
         try {
-            const res = await fetch('http://localhost:4000/api/admin/products');
+            const res = await fetch(apiUrl('/admin/products'));
             if (res.ok) setProducts(await res.json());
         } catch (e) { console.error(e); }
     };
@@ -70,7 +71,7 @@ export default function AdminDashboard() {
     const handleCreateProduct = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await fetch('http://localhost:4000/api/admin/products', {
+            await fetch(apiUrl('/admin/products'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newProduct)
@@ -83,7 +84,7 @@ export default function AdminDashboard() {
     const handleUpdateProduct = async () => {
         if (!editingProduct) return;
         try {
-            await fetch(`http://localhost:4000/api/admin/products/${editingProduct.product_id}`, {
+            await fetch(apiUrl(`/admin/products/${editingProduct.product_id}`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(editingProduct)
@@ -96,14 +97,14 @@ export default function AdminDashboard() {
     const handleDeleteProduct = async (id: number) => {
         if (!window.confirm('Delete this product?')) return;
         try {
-            await fetch(`http://localhost:4000/api/admin/products/${id}`, { method: 'DELETE' });
+            await fetch(apiUrl(`/admin/products/${id}`), { method: 'DELETE' });
             fetchProducts();
         } catch (e) { console.error(e); }
     };
 
     const smartAssignDriver = async (orderId: number) => {
         try {
-            await fetch(`http://localhost:4000/api/orders/${orderId}/assign-driver`, { method: 'PUT' });
+            await fetch(apiUrl(`/orders/${orderId}/assign-driver`), { method: 'PUT' });
             fetchOrders();
         } catch (e) { console.error(e); }
     };
@@ -112,7 +113,7 @@ export default function AdminDashboard() {
         e.preventDefault();
         if (!replyText.trim() || !selectedSession) return;
         try {
-            await fetch(`http://localhost:4000/api/admin/chat-sessions/${selectedSession}/reply`, {
+            await fetch(apiUrl(`/admin/chat-sessions/${selectedSession}/reply`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: replyText })
@@ -125,7 +126,7 @@ export default function AdminDashboard() {
     const handleResolve = async () => {
         if (!selectedSession) return;
         try {
-            await fetch(`http://localhost:4000/api/chat/sessions/${selectedSession}/resolve`, {
+            await fetch(apiUrl(`/chat/sessions/${selectedSession}/resolve`), {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ internal_note: internalNote })
