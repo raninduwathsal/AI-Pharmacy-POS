@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool from '../db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { AuthRequest } from '../middleware/auth';
+import { io } from '../server';
 
 // ----------------- INVENTORY & GRN -----------------
 
@@ -77,6 +78,11 @@ export const receiveStock = async (req: Request, res: Response) => {
         );
 
         await connection.commit();
+        
+        io.emit('inventory_alert', { message: 'Stock received' });
+        if (payment_method === 'Check') {
+            io.emit('finance_alert', { message: 'New check added' });
+        }
 
         res.status(201).json({
             message: 'Stock received successfully',

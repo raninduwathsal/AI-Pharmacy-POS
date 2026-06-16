@@ -168,6 +168,9 @@ export const confirmCheckout = async (req: AuthRequest, res: Response) => {
         }
 
         await connection.commit();
+        
+        io.emit('inventory_alert', { message: 'Stock levels updated' });
+
         res.status(200).json({
             message: "Checkout completed successfully",
             invoice_id: invoiceId,
@@ -417,6 +420,28 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
     } catch (error: any) {
         console.error("Upload Prescription Error:", error);
         res.status(500).json({ error: error.message || 'Failed to process image' });
+    }
+};
+
+export const uploadMobilePrescription = async (req: AuthRequest, res: Response) => {
+    try {
+        const file = (req as any).file;
+        if (!file) {
+            return res.status(400).json({ error: 'No image uploaded' });
+        }
+
+        const base64Image = file.buffer.toString('base64');
+        const mimeType = file.mimetype;
+        const dataUrl = `data:${mimeType};base64,${base64Image}`;
+
+        io.emit('new_prescription_photo', {
+            photo_url: dataUrl
+        });
+
+        res.status(200).json({ message: "Photo uploaded and sent to web app successfully" });
+    } catch (error: any) {
+        console.error("Upload Mobile Prescription Error:", error);
+        res.status(500).json({ error: error.message || 'Failed to process mobile image upload' });
     }
 };
 

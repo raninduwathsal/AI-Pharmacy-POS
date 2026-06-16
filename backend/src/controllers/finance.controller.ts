@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../db';
 import { RowDataPacket } from 'mysql2';
+import { io } from '../server';
 
 // ----------------- FINANCE (CHECKS) -----------------
 
@@ -41,6 +42,9 @@ export const clearCheck = async (req: Request, res: Response) => {
         );
 
         await connection.commit();
+        
+        io.emit('finance_alert', { message: 'Check cleared' });
+
         res.status(200).json({ message: 'Check cleared successfully' });
 
     } catch (error) {

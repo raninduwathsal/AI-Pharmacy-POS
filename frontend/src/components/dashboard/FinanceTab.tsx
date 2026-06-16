@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
 
 interface PendingCheck {
     invoice_id: number;
@@ -227,9 +228,10 @@ export default function FinanceTab({
                 </CardContent>
             </Card>
 
-            <div className="space-y-4">
-                <h2 className="text-2xl font-bold">Post-Dated Checks Tracker</h2>
-                <Table>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4">
+                    <h2 className="text-2xl font-bold">Post-Dated Checks Tracker</h2>
+                    <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Invoice #</TableHead>
@@ -275,7 +277,20 @@ export default function FinanceTab({
                             </TableRow>
                         )}
                     </TableBody>
-                </Table>
+                    </Table>
+                </div>
+                <div className="space-y-4">
+                    <h2 className="text-2xl font-bold">Check Calendar</h2>
+                    <Card className="shadow-sm">
+                        <CardContent className="p-4 flex justify-center">
+                            <Calendar
+                                mode="multiple"
+                                selected={checks.map(c => new Date(c.check_date))}
+                                className="rounded-md"
+                            />
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
 
             <div className="space-y-4 pt-6 border-t mt-8">

@@ -1,0 +1,65 @@
+import { View, Text, StyleSheet } from 'react-native';
+import { useState, useCallback } from 'react';
+import { Calendar } from 'react-native-calendars';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from 'expo-router';
+
+export default function FinanceScreen() {
+  const [markedDates, setMarkedDates] = useState<any>({});
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadChecks = async () => {
+        const baseUrl = await AsyncStorage.getItem('backend_url');
+        const token = await AsyncStorage.getItem('token');
+        if (baseUrl && token) {
+          try {
+            const res = await fetch(`${baseUrl}/finance/pending-checks`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+              const dates: any = {};
+              data.forEach((check: any) => {
+                const dateStr = new Date(check.check_date).toISOString().split('T')[0];
+                dates[dateStr] = { marked: true, dotColor: '#ef4444' };
+              });
+              setMarkedDates(dates);
+            }
+          } catch(e) {}
+        }
+      };
+      loadChecks();
+    }, [])
+  );
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Pending Checks Tracker</Text>
+      <View style={styles.calendarCard}>
+        <Calendar
+          markedDates={markedDates}
+          theme={{
+            todayTextColor: '#2563eb',
+            arrowColor: '#2563eb',
+            dotColor: '#ef4444',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
+  calendarCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3
+  }
+});

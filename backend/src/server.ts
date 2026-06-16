@@ -76,9 +76,10 @@ app.put('/api/patients/:id', authenticateToken, hasPermission('MANAGE_PATIENTS')
 app.delete('/api/patients/:id/opt-out', authenticateToken, hasPermission('MANAGE_PATIENTS'), auditLogMiddleware('DELETE_PATIENT_DATA'), optOutPatient);
 
 // --- POS Routes ---
-import { processPrescription, saveDraftSale, confirmCheckout, searchPosProducts, getInvoiceReceipt, getSalesHistory, deleteInvoice, uploadPrescriptionImage } from './controllers/pos.controller';
+import { processPrescription, saveDraftSale, confirmCheckout, searchPosProducts, getInvoiceReceipt, getSalesHistory, deleteInvoice, uploadPrescriptionImage, uploadMobilePrescription } from './controllers/pos.controller';
 app.post('/api/pos/process-prescription', processPrescription); // Microservice auth
 app.post('/api/pos/upload-prescription', authenticateToken, hasPermission('VIEW_TAB_POS'), upload.single('image'), uploadPrescriptionImage);
+app.post('/api/pos/upload-mobile-prescription', authenticateToken, upload.single('image'), uploadMobilePrescription);
 app.post('/api/pos/draft', authenticateToken, hasPermission('VIEW_TAB_POS'), saveDraftSale);
 app.post('/api/pos/checkout', authenticateToken, hasPermission('VIEW_TAB_POS'), confirmCheckout);
 app.get('/api/pos/search', authenticateToken, hasPermission('VIEW_TAB_POS'), searchPosProducts);

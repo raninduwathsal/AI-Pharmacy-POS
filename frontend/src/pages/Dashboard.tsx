@@ -6,8 +6,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { io } from 'socket.io-client';
+import { API_BASE_URL } from '@/lib/api';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import InventoryTab from '@/components/dashboard/InventoryTab';
 import SuppliersTab from '@/components/dashboard/SuppliersTab';
 import GRNTab from '@/components/dashboard/GRNTab';
@@ -39,6 +42,8 @@ export default function Dashboard() {
     const [isSaving, setIsSaving] = useState(false);
     const navigate = useNavigate();
     const { toast } = useToast();
+    const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false);
+    const [photoUrl, setPhotoUrl] = useState('');
 
     // The logged-in user
     const user = JSON.parse(localStorage.getItem('user') || '{}') as any;
@@ -69,7 +74,52 @@ export default function Dashboard() {
             return;
         }
         loadData();
+
+        const socket = io(API_BASE_URL.replace('/api', ''));
+        socket.on('new_prescription_photo', (data: any) => {
+            setPhotoUrl(data.photo_url);
+            setIsPhotoDialogOpen(true);
+        });
+
+        return () => {
+            socket.disconnect();
+        };
     }, [navigate]);
+
+    const handleProcessMobilePhoto = async () => {
+        setIsPhotoDialogOpen(false);
+        toast({ title: 'Processing', description: 'Sending mobile photo to AI...' });
+
+        try {
+            const dataURLtoBlob = (dataurl: string) => {
+                const arr = dataurl.split(',');
+                const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+                const bstr = atob(arr[1]);
+                let n = bstr.length;
+                const u8arr = new Uint8Array(n);
+                while (n--) {
+                    u8arr[n] = bstr.charCodeAt(n);
+                }
+                return new Blob([u8arr], { type: mime });
+            };
+
+            const blob = dataURLtoBlob(photoUrl);
+            const formData = new FormData();
+            formData.append('image', blob, 'mobile-upload.jpg');
+
+            const res = await fetch(`${API_BASE_URL}/pos/upload-prescription`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: formData
+            });
+
+            if (!res.ok) throw new Error('Upload failed');
+        } catch (e: any) {
+            toast({ title: 'Error', description: 'Failed to process mobile photo', variant: 'destructive' });
+        }
+    };
 
     const togglePermission = (roleId: number, permId: number) => {
         setRoles(prevRoles => prevRoles.map(role => {
@@ -292,6 +342,22 @@ export default function Dashboard() {
 
                 </Tabs>
             </div>
+
+            <Dialog open={isPhotoDialogOpen} onOpenChange={setIsPhotoDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>New Prescription from Mobile</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4 text-center">
+                        <img src={photoUrl} alt="Prescription" className="max-h-64 mx-auto mb-4 rounded-lg shadow" />
+                        <p>New photo received from mobile. Send to AI for OCR?</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsPhotoDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleProcessMobilePhoto}>Yes, Process Image</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
