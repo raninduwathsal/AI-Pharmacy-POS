@@ -324,19 +324,19 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
 
         const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.5-flash',
             contents: [
                 {
                     role: 'user',
                     parts: [
                         { inlineData: { data: file.buffer.toString("base64"), mimeType: file.mimetype } },
-                        { text: 'Extract the prescription information from this image. Return a JSON object ONLY with the following schema: { "extracted_lines": [{ "medicine_name_raw": "string", "frequency": "string (like OD, BID, etc)", "total_amount": number }] }' }
+                        { text: 'Extract the prescription information from this image. For frequency, strictly use one of these options if possible: OD, BID, TID, QID, Q4H, Q8H, STAT, PRN. For gels or creams, instead of "apply", use "PRN". If you cannot find a total quantity, default total_amount to 1. Return a JSON object ONLY with the following schema: { "extracted_lines": [{ "medicine_name_raw": "string", "frequency": "string", "total_amount": number }] }' }
                     ]
                 }
             ]
         });
 
-        let jsonStr = response.text().replace(/```json/gi, '').replace(/```/g, '').trim();
+        let jsonStr = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
         const extractedData = JSON.parse(jsonStr);
 
         const connection = await pool.getConnection();
@@ -349,12 +349,51 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
             );
             const prescriptionId = rxResult.insertId;
 
+            // Pre-fetch all products for fuzzy matching
+            const [allProducts] = await connection.query<RowDataPacket[]>(`SELECT product_id, name, selling_price, current_stock FROM Products`);
+
             if (extractedData.extracted_lines && Array.isArray(extractedData.extracted_lines)) {
                 for (const line of extractedData.extracted_lines) {
+                    
+                    // --- Basic Fuzzy Match Logic ---
+                    let matchedId = null;
+                    let matchedName = null;
+                    let matchedPrice = null;
+                    
+                    if (line.medicine_name_raw) {
+                        const rawStr = line.medicine_name_raw.toUpperCase().trim();
+                        const rawWords = rawStr.split(' ').filter((w: string) => w.length > 2); // Ignore short words like "mg"
+                        
+                        let bestMatch = null;
+                        for (const p of allProducts) {
+                            const pName = p.name.toUpperCase();
+                            // Exact substring match
+                            if (pName.includes(rawStr) || rawStr.includes(pName)) {
+                                bestMatch = p;
+                                break;
+                            }
+                            // Word match (e.g. "Amoxicillin")
+                            if (rawWords.length > 0 && rawWords.some((w: string) => pName.includes(w))) {
+                                bestMatch = p;
+                            }
+                        }
+                        
+                        if (bestMatch) {
+                            matchedId = bestMatch.product_id;
+                            matchedName = bestMatch.name;
+                            matchedPrice = bestMatch.selling_price;
+                            
+                            line.matched_product_id = matchedId;
+                            line.matched_product_name = matchedName;
+                            line.matched_unit_price = matchedPrice;
+                        }
+                    }
+                    // --------------------------------
+
                     await connection.query(
                         `INSERT INTO Prescription_lines (prescription_id, medicine_name_raw, frequency, total_amount, matched_product_id) 
                          VALUES (?, ?, ?, ?, ?)`,
-                        [prescriptionId, line.medicine_name_raw, line.frequency || '', line.total_amount || 0, null]
+                        [prescriptionId, line.medicine_name_raw, line.frequency || '', line.total_amount || 0, matchedId]
                     );
                 }
             }

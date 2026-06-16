@@ -778,8 +778,56 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                 {aiLines.map((line, idx) => (
                                     <TableRow key={idx} className={line.matched_product_id ? "bg-green-50/50" : "bg-amber-50/50"}>
                                         <TableCell className="font-mono text-xs">{line.medicine_name_raw}</TableCell>
-                                        <TableCell>{line.frequency}</TableCell>
-                                        <TableCell>{line.total_amount}</TableCell>
+                                        <TableCell>
+                                            <Select 
+                                                value={['OD','BID','TID','QID','Q4H','Q8H','STAT','PRN'].includes(line.frequency || '') ? line.frequency : 'Custom'} 
+                                                onValueChange={v => {
+                                                    const newLines = [...aiLines];
+                                                    newLines[idx].frequency = v === 'Custom' ? '' : v;
+                                                    setAiLines(newLines);
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[110px] h-8 bg-white text-xs">
+                                                    <SelectValue placeholder="Freq..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="OD">OD (1/day)</SelectItem>
+                                                    <SelectItem value="BID">BID (2/day)</SelectItem>
+                                                    <SelectItem value="TID">TID (3/day)</SelectItem>
+                                                    <SelectItem value="QID">QID (4/day)</SelectItem>
+                                                    <SelectItem value="Q4H">Q4H (Every 4hrs)</SelectItem>
+                                                    <SelectItem value="Q8H">Q8H (Every 8hrs)</SelectItem>
+                                                    <SelectItem value="STAT">STAT (Now)</SelectItem>
+                                                    <SelectItem value="PRN">PRN (As needed)</SelectItem>
+                                                    <SelectItem value="Custom">Custom / Type</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            {!['OD','BID','TID','QID','Q4H','Q8H','STAT','PRN'].includes(line.frequency || '') && (
+                                                <Input 
+                                                    className="h-8 w-[110px] text-xs bg-white mt-1" 
+                                                    placeholder="Type freq..."
+                                                    value={line.frequency || ''} 
+                                                    onChange={(e) => {
+                                                        const newLines = [...aiLines];
+                                                        newLines[idx].frequency = e.target.value;
+                                                        setAiLines(newLines);
+                                                    }} 
+                                                />
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Input 
+                                                type="number" 
+                                                min="1" 
+                                                className="h-8 w-16 text-xs bg-white" 
+                                                value={line.total_amount || ''} 
+                                                onChange={(e) => {
+                                                    const newLines = [...aiLines];
+                                                    newLines[idx].total_amount = Number(e.target.value);
+                                                    setAiLines(newLines);
+                                                }} 
+                                            />
+                                        </TableCell>
                                         <TableCell>
                                             <Popover open={openAiMapBox === idx} onOpenChange={(isOpen) => setOpenAiMapBox(isOpen ? idx : null)}>
                                                 <PopoverTrigger asChild>
