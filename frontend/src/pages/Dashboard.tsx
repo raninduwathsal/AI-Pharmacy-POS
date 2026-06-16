@@ -17,6 +17,7 @@ import SettingsTab from '@/components/dashboard/SettingsTab';
 import PatientsTab from '@/components/dashboard/PatientsTab';
 import AuditLogs from './admin/AuditLogs';
 import FinancialAnalytics from './admin/FinancialAnalytics';
+import NotificationBell from '@/components/dashboard/NotificationBell';
 
 interface Permission {
     perm_id: number;
@@ -132,7 +133,10 @@ export default function Dashboard() {
                         <h1 className="text-3xl font-bold tracking-tight text-blue-900">Pharmacy POS System</h1>
                         <p className="text-slate-500 mt-1">Logged in as <span className="font-semibold text-slate-800">{user.name}</span> ({user.role})</p>
                     </div>
-                    <Button variant="outline" onClick={handleLogout} className="border-red-200 text-red-600 hover:bg-red-50">Logout</Button>
+                    <div className="flex items-center gap-4">
+                        <NotificationBell />
+                        <Button variant="outline" onClick={handleLogout} className="border-red-200 text-red-600 hover:bg-red-50">Logout</Button>
+                    </div>
                 </div>
 
                 <Tabs defaultValue={defaultTab} className="w-full">
