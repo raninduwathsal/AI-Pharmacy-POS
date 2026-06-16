@@ -3,6 +3,7 @@ import pool from '../db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { AuthRequest } from '../middleware/auth';
 import { io } from '../server';
+import { GoogleGenAI } from '@google/genai';
 
 export const processPrescription = async (req: Request, res: Response) => {
     // Webhook from AI Microservice
@@ -306,6 +307,77 @@ export const deleteInvoice = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ error: 'Internal error' });
     } finally {
         connection.release();
+    }
+};
+
+export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) => {
+    try {
+        const file = (req as any).file;
+        if (!file) {
+            return res.status(400).json({ error: 'No image uploaded' });
+        }
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+                {
+                    role: 'user',
+                    parts: [
+                        { inlineData: { data: file.buffer.toString("base64"), mimeType: file.mimetype } },
+                        { text: 'Extract the prescription information from this image. Return a JSON object ONLY with the following schema: { "extracted_lines": [{ "medicine_name_raw": "string", "frequency": "string (like OD, BID, etc)", "total_amount": number }] }' }
+                    ]
+                }
+            ]
+        });
+
+        let jsonStr = response.text().replace(/```json/gi, '').replace(/```/g, '').trim();
+        const extractedData = JSON.parse(jsonStr);
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            const [rxResult] = await connection.query<ResultSetHeader>(
+                `INSERT INTO Prescriptions (patient_id, status) VALUES (?, 'Pending Verification')`,
+                [null]
+            );
+            const prescriptionId = rxResult.insertId;
+
+            if (extractedData.extracted_lines && Array.isArray(extractedData.extracted_lines)) {
+                for (const line of extractedData.extracted_lines) {
+                    await connection.query(
+                        `INSERT INTO Prescription_lines (prescription_id, medicine_name_raw, frequency, total_amount, matched_product_id) 
+                         VALUES (?, ?, ?, ?, ?)`,
+                        [prescriptionId, line.medicine_name_raw, line.frequency || '', line.total_amount || 0, null]
+                    );
+                }
+            }
+
+            await connection.commit();
+
+            io.emit('new_ai_scan_received', {
+                prescription_id: prescriptionId,
+                patient_id: null,
+                extracted_lines: extractedData.extracted_lines
+            });
+
+            res.status(200).json({ message: "Image processed successfully", prescription_id: prescriptionId });
+        } catch (dbError) {
+            await connection.rollback();
+            throw dbError;
+        } finally {
+            connection.release();
+        }
+
+    } catch (error: any) {
+        console.error("Upload Prescription Error:", error);
+        res.status(500).json({ error: error.message || 'Failed to process image' });
     }
 };
 

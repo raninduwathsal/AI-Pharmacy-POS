@@ -94,6 +94,9 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("sale");
 
+    const [isUploadingAi, setIsUploadingAi] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     useEffect(() => {
         // Connect to Socket.io for Real-time AI Webhooks
         const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -130,6 +133,40 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             setHistory(data);
         } catch (error) {
             console.error(error);
+        }
+    };
+
+    const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('image', file);
+
+        setIsUploadingAi(true);
+        try {
+            const token = localStorage.getItem('token');
+            const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+            const response = await fetch(`${backendUrl}/pos/upload-prescription`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to process image');
+            }
+            toast({ title: 'AI OCR Complete', description: 'Image processed successfully. Loading review screen...' });
+        } catch (error: any) {
+            toast({ title: 'Upload Failed', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsUploadingAi(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
         }
     };
 
@@ -437,11 +474,18 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                 <div className="space-y-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
                                     <div className="flex justify-between items-center">
                                         <h2 className="text-xl font-bold text-indigo-900">Prescription Items</h2>
-                                        {aiLines.length > 0 && !aiModalOpen && (
-                                            <Button variant="outline" className="border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100" onClick={() => setAiModalOpen(true)}>
-                                                <Zap className="h-4 w-4 mr-2" /> Review Pending AI Data
+                                        <div className="flex space-x-2">
+                                            <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleUploadImage} />
+                                            <Button variant="outline" className="border-indigo-300 text-indigo-700 hover:bg-indigo-50" onClick={() => fileInputRef.current?.click()} disabled={isUploadingAi}>
+                                                <Zap className={cn("h-4 w-4 mr-2", isUploadingAi ? "animate-pulse text-indigo-400" : "text-indigo-600")} />
+                                                {isUploadingAi ? "Scanning with AI..." : "Upload Rx Image"}
                                             </Button>
-                                        )}
+                                            {aiLines.length > 0 && !aiModalOpen && (
+                                                <Button variant="outline" className="border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100" onClick={() => setAiModalOpen(true)}>
+                                                    <Zap className="h-4 w-4 mr-2" /> Review Pending AI Data
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="border rounded-md bg-white shadow-sm overflow-hidden">
                                         <Table>
