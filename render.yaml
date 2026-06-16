@@ -1,6 +1,7 @@
 services:
   - type: web
     name: ai-pharmacy-backend
+    plan: free
     env: node
     rootDir: backend
     buildCommand: npm install
@@ -15,5 +16,7 @@ services:
         sync: false # You must set your Aiven connection string securely in the Render dashboard
       - key: JWT_SECRET
         generateValue: true # Render will automatically generate a strong secret for signing JWTs
+      - key: ENCRYPTION_KEY
+        sync: false # Set a 32-character key for data encryption in the Render dashboard
       - key: GEMINI_API_KEY
         sync: false # Set your Gemini API key in the Render dashboard
