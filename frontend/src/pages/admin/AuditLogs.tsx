@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, Download, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { API_BASE_URL } from '@/lib/api';
 
 interface AuditLog {
     log_id: number;
@@ -34,7 +35,7 @@ export default function AuditLogs() {
                 ...(endDate && { end_date: endDate }),
             }).toString();
 
-            const res = await fetch(`http://localhost:5000/api/admin/audit-logs?${query}`, {
+            const res = await fetch(`${API_BASE_URL}/admin/audit-logs?${query}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -55,7 +56,7 @@ export default function AuditLogs() {
     const handleExport = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:5000/api/admin/audit-logs/export', {
+            const res = await fetch(`${API_BASE_URL}/admin/audit-logs/export`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -80,7 +81,7 @@ export default function AuditLogs() {
         if (!confirm('Are you sure you want to delete this log?')) return;
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`http://localhost:5000/api/admin/audit-logs/${id}`, {
+            const res = await fetch(`${API_BASE_URL}/admin/audit-logs/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });

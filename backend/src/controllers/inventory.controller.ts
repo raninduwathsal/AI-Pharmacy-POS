@@ -40,31 +40,33 @@ export const receiveStock = async (req: Request, res: Response) => {
         );
         const invoiceId = invoiceResult.insertId;
 
-        // 3. Insert Inventory_Batches AND Update Products.current_stock
+        // 3. Insert Supplier_Invoice_Items AND Update Products.current_stock
         for (const batch of batches) {
             const qty = Number(batch.purchased_quantity) + Number(batch.bonus_quantity || 0);
 
             await connection.query(
-                `INSERT INTO Inventory_Batches 
-                (product_id, supplier_invoice_id, batch_number, expiry_date, location, purchased_quantity, bonus_quantity, unit_cost, current_stock_level) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO Supplier_Invoice_Items 
+                (supplier_invoice_id, product_id, purchased_quantity, bonus_quantity, unit_cost, expiry_date) 
+                VALUES (?, ?, ?, ?, ?, ?)`,
                 [
-                    batch.product_id,
                     invoiceId,
-                    batch.batch_number,
-                    batch.expiry_date,
-                    batch.location || null,
+                    batch.product_id,
                     batch.purchased_quantity,
                     batch.bonus_quantity || 0,
                     batch.unit_cost,
-                    qty
+                    batch.expiry_date
                 ]
             );
 
-            // Sync the master Product stock level
+            // Sync the master Product stock level, unit_cost, and expiry_dates
+            // If expiry_dates is null, set it to an array with this date. Else, append if it doesn't exist (though duplicate appending is fine for basic OR logic).
             await connection.query(
-                `UPDATE Products SET current_stock = current_stock + ? WHERE product_id = ?`,
-                [qty, batch.product_id]
+                `UPDATE Products 
+                 SET current_stock = current_stock + ?, 
+                     unit_cost = ?, 
+                     expiry_dates = IF(expiry_dates IS NULL, JSON_ARRAY(?), JSON_ARRAY_APPEND(expiry_dates, '$', ?)) 
+                 WHERE product_id = ?`,
+                [qty, batch.unit_cost, batch.expiry_date, batch.expiry_date, batch.product_id]
             );
         }
 
@@ -100,13 +102,42 @@ export const getAlerts = async (req: Request, res: Response) => {
              WHERE current_stock <= reorder_threshold AND reorder_threshold > 0`
         );
 
-        const [nearExpiry] = await pool.query<RowDataPacket[]>(
-            `SELECT b.batch_id, p.product_id, p.name, b.batch_number, b.expiry_date, b.current_stock_level
-             FROM Inventory_Batches b
-             JOIN Products p ON b.product_id = p.product_id
-             WHERE b.current_stock_level > 0 
-               AND b.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)`
+        const [allProducts] = await pool.query<RowDataPacket[]>(
+            `SELECT product_id, name, expiry_dates, current_stock AS current_stock_level
+             FROM Products
+             WHERE current_stock > 0 AND expiry_dates IS NOT NULL`
         );
+
+        const nearExpiry = [];
+        const now = new Date();
+        const in30Days = new Date();
+        in30Days.setDate(in30Days.getDate() + 30);
+
+        for (const p of allProducts) {
+            let dates: string[] = [];
+            try {
+                dates = typeof p.expiry_dates === 'string' ? JSON.parse(p.expiry_dates) : p.expiry_dates;
+            } catch (e) { continue; }
+            
+            const expiringDates = [];
+            for (const d of dates) {
+                const ed = new Date(d);
+                if (ed >= now && ed <= in30Days) {
+                    expiringDates.push(d);
+                }
+            }
+
+            if (expiringDates.length > 0) {
+                // Deduplicate dates for clean display
+                const uniqueDates = Array.from(new Set(expiringDates)).sort();
+                nearExpiry.push({
+                    product_id: p.product_id,
+                    name: p.name,
+                    expiring_dates: uniqueDates,
+                    current_stock_level: p.current_stock_level
+                });
+            }
+        }
 
         res.status(200).json({ lowStock, nearExpiry });
     } catch (error) {
@@ -134,174 +165,4 @@ export const getGrnHistory = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// ----------------- BATCHES (CRUD) -----------------
 
-export const getAllBatches = async (req: Request, res: Response) => {
-    try {
-        const [rows] = await pool.query(`
-            SELECT b.*, p.name as product_name
-            FROM Inventory_Batches b
-            JOIN Products p ON b.product_id = p.product_id
-            ORDER BY b.expiry_date ASC
-        `);
-        res.status(200).json(rows);
-    } catch (error) {
-        console.error("Error fetching batches:", error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-};
-
-export const createBatch = async (req: AuthRequest, res: Response) => {
-    const connection = await pool.getConnection();
-    try {
-        const { product_id, batch_number, expiry_date, location, purchased_quantity, bonus_quantity, unit_cost } = req.body;
-
-        if (!product_id || !batch_number || !expiry_date || purchased_quantity === undefined || unit_cost === undefined) {
-            return res.status(400).json({ error: 'Missing required batch fields' });
-        }
-
-        const qty = Number(purchased_quantity) + Number(bonus_quantity || 0);
-        const emp_id = req.user?.emp_id;
-
-        await connection.beginTransaction();
-
-        const [result] = await connection.query<ResultSetHeader>(
-            `INSERT INTO Inventory_Batches 
-            (product_id, supplier_invoice_id, batch_number, expiry_date, location, purchased_quantity, bonus_quantity, unit_cost, current_stock_level) 
-            VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
-            [product_id, batch_number, expiry_date, location || null, purchased_quantity, bonus_quantity || 0, unit_cost, qty]
-        );
-
-        await connection.query(
-            `UPDATE Products SET current_stock = current_stock + ? WHERE product_id = ?`,
-            [qty, product_id]
-        );
-
-        if (emp_id) {
-            await connection.query(
-                `INSERT INTO Audit_Logs (emp_id, action_type, details) VALUES (?, ?, ?)`,
-                [emp_id, 'CREATE_BATCH', `Created batch ${batch_number} manually for product ${product_id} with quantity ${qty}`]
-            );
-        }
-
-        await connection.commit();
-        res.status(201).json({ message: 'Batch created successfully', batch_id: result.insertId });
-    } catch (error) {
-        await connection.rollback();
-        console.error("Error creating batch:", error);
-        res.status(500).json({ error: 'Internal server error' });
-    } finally {
-        connection.release();
-    }
-};
-
-export const updateBatch = async (req: AuthRequest, res: Response) => {
-    const connection = await pool.getConnection();
-    try {
-        const id = req.params.id;
-        const { batch_number, expiry_date, location, purchased_quantity, bonus_quantity, unit_cost, current_stock_level } = req.body;
-
-        if (!batch_number || !expiry_date || current_stock_level === undefined || unit_cost === undefined) {
-            return res.status(400).json({ error: 'Missing required batch fields' });
-        }
-
-        await connection.beginTransaction();
-
-        const [oldBatchRows] = await connection.query<RowDataPacket[]>(
-            'SELECT product_id, current_stock_level FROM Inventory_Batches WHERE batch_id = ?',
-            [id]
-        );
-
-        if (oldBatchRows.length === 0) {
-            await connection.rollback();
-            return res.status(404).json({ error: 'Batch not found' });
-        }
-
-        const oldBatch = oldBatchRows[0];
-        const stockDiff = Number(current_stock_level) - oldBatch.current_stock_level;
-
-        await connection.query(
-            `UPDATE Inventory_Batches 
-             SET batch_number = ?, expiry_date = ?, location = ?, purchased_quantity = ?, bonus_quantity = ?, unit_cost = ?, current_stock_level = ? 
-             WHERE batch_id = ?`,
-            [batch_number, expiry_date, location || null, purchased_quantity || 0, bonus_quantity || 0, unit_cost, current_stock_level, id]
-        );
-
-        if (stockDiff !== 0) {
-            await connection.query(
-                `UPDATE Products SET current_stock = current_stock + ? WHERE product_id = ?`,
-                [stockDiff, oldBatch.product_id]
-            );
-        }
-
-        const emp_id = req.user?.emp_id;
-        if (emp_id) {
-            await connection.query(
-                `INSERT INTO Audit_Logs (emp_id, action_type, details) VALUES (?, ?, ?)`,
-                [emp_id, 'UPDATE_BATCH', `Updated batch ID ${id} (changed stock by ${stockDiff})`]
-            );
-        }
-
-        await connection.commit();
-        res.status(200).json({ message: 'Batch updated successfully' });
-    } catch (error) {
-        await connection.rollback();
-        console.error("Error updating batch:", error);
-        res.status(500).json({ error: 'Internal server error' });
-    } finally {
-        connection.release();
-    }
-};
-
-export const deleteBatch = async (req: AuthRequest, res: Response) => {
-    const connection = await pool.getConnection();
-    try {
-        const id = req.params.id;
-
-        await connection.beginTransaction();
-
-        const [oldBatchRows] = await connection.query<RowDataPacket[]>(
-            'SELECT product_id, current_stock_level FROM Inventory_Batches WHERE batch_id = ?',
-            [id]
-        );
-
-        if (oldBatchRows.length === 0) {
-            await connection.rollback();
-            return res.status(404).json({ error: 'Batch not found' });
-        }
-
-        const oldBatch = oldBatchRows[0];
-
-        try {
-            await connection.query('DELETE FROM Inventory_Batches WHERE batch_id = ?', [id]);
-        } catch (err: any) {
-            if (err.code === 'ER_ROW_IS_REFERENCED_2') {
-                await connection.rollback();
-                return res.status(400).json({ error: 'Cannot delete batch because it is linked to sale items.' });
-            }
-            throw err;
-        }
-
-        await connection.query(
-            `UPDATE Products SET current_stock = current_stock - ? WHERE product_id = ?`,
-            [oldBatch.current_stock_level, oldBatch.product_id]
-        );
-
-        const emp_id = req.user?.emp_id;
-        if (emp_id) {
-            await connection.query(
-                `INSERT INTO Audit_Logs (emp_id, action_type, details) VALUES (?, ?, ?)`,
-                [emp_id, 'DELETE_BATCH', `Deleted batch ID ${id} (decreased product stock by ${oldBatch.current_stock_level})`]
-            );
-        }
-
-        await connection.commit();
-        res.status(200).json({ message: 'Batch deleted successfully' });
-    } catch (error: any) {
-        await connection.rollback();
-        console.error("Error deleting batch:", error);
-        res.status(500).json({ error: 'Internal server error' });
-    } finally {
-        connection.release();
-    }
-};

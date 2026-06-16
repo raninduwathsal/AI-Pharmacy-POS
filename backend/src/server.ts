@@ -50,12 +50,7 @@ app.post('/api/inventory/receive', authenticateToken, hasPermission('VIEW_TAB_GR
 app.get('/api/inventory/alerts', authenticateToken, hasPermission('VIEW_TAB_INVENTORY'), getAlerts);
 app.get('/api/inventory/grn-history', authenticateToken, hasPermission('VIEW_TAB_GRN'), getGrnHistory);
 
-// --- Batches Routes ---
-import { getAllBatches, createBatch, updateBatch, deleteBatch } from './controllers/inventory.controller';
-app.get('/api/inventory/batches', authenticateToken, hasPermission('VIEW_TAB_INVENTORY'), getAllBatches);
-app.post('/api/inventory/batches', authenticateToken, hasPermission('VIEW_TAB_INVENTORY'), createBatch);
-app.put('/api/inventory/batches/:id', authenticateToken, hasPermission('VIEW_TAB_INVENTORY'), updateBatch);
-app.delete('/api/inventory/batches/:id', authenticateToken, hasPermission('VIEW_TAB_INVENTORY'), deleteBatch);
+// --- Batches Routes Removed ---
 
 // --- Finance Routes ---
 app.get('/api/finance/pending-checks', authenticateToken, hasPermission('VIEW_TAB_FINANCE'), getPendingChecks);
@@ -116,8 +111,14 @@ app.get('/api/admin/employees', authenticateToken, hasPermission('MANAGE_PAYROLL
 app.put('/api/admin/employees/:id/salary', authenticateToken, hasPermission('MANAGE_PAYROLL'), auditLogMiddleware('UPDATE_EMPLOYEE_SALARY'), updateEmployeeSalary);
 
 // Basic health check
-app.get('/api/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
+app.get('/api/health', async (req, res) => {
+    try {
+        await pool.query('SELECT 1');
+        res.status(200).json({ status: 'ok', database: 'connected' });
+    } catch (error) {
+        console.error('Health check DB error:', error);
+        res.status(500).json({ status: 'error', database: 'disconnected' });
+    }
 });
 
 const PORT = process.env.PORT || 5000;

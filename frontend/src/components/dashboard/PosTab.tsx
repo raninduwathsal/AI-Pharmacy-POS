@@ -29,7 +29,6 @@ interface ProductSearchResult {
     measure_unit: string;
     total_stock: number;
     selling_price: number;
-    batches: any[];
 }
 
 interface CartItem {
@@ -39,7 +38,6 @@ interface CartItem {
     quantity: number;
     unit_price: number;
     frequency: string;
-    batch_id?: number | null;
     type: 'rx' | 'otc';
 }
 
@@ -273,7 +271,6 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                 notes: 'Saved as draft',
                 items: validItems.map(item => ({
                     product_id: item.product_id,
-                    batch_id: item.batch_id, // If assigned
                     quantity: Number(item.quantity),
                     unit_price: Number(item.unit_price),
                     type: item.type,

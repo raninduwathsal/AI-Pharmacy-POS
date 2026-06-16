@@ -69,10 +69,10 @@ export const saveDraftSale = async (req: AuthRequest, res: Response) => {
         // Assuming `items` array has { batch_id, quantity, unit_price }
         if (items && items.length > 0) {
             for (const item of items) {
-                if (item.batch_id) {
+                if (item.product_id) {
                     await connection.query(
-                        `INSERT INTO Sale_Items (invoice_id, batch_id, quantity, unit_price, item_type, frequency) VALUES (?, ?, ?, ?, ?, ?)`,
-                        [invoiceId, item.batch_id, item.quantity, item.unit_price, item.type || 'otc', item.frequency || '']
+                        `INSERT INTO Sale_Items (invoice_id, product_id, quantity, unit_price, item_type, frequency) VALUES (?, ?, ?, ?, ?, ?)`,
+                        [invoiceId, item.product_id, item.quantity, item.unit_price, item.type || 'otc', item.frequency || '']
                     );
                 }
             }
@@ -138,51 +138,31 @@ export const confirmCheckout = async (req: AuthRequest, res: Response) => {
         );
         const invoiceId = invResult.insertId;
 
-        // 2. Perform FEFO deductions per product line
+        // 2. Deduct from global Product stock tracking and Record Sale Item
         for (const item of items) {
             const productId = item.product_id;
-            let reqQty = item.quantity;
+            const reqQty = item.quantity;
             const sellingPrice = item.unit_price;
 
-            // Fetch available batches ordered by Expiry Date ASC
-            const [batches] = await connection.query<RowDataPacket[]>(
-                `SELECT batch_id, current_stock_level, unit_cost
-                 FROM Inventory_Batches 
-                 WHERE product_id = ? AND current_stock_level > 0 
-                 ORDER BY expiry_date ASC 
-                 FOR UPDATE`,
+            const [products] = await connection.query<RowDataPacket[]>(
+                `SELECT current_stock FROM Products WHERE product_id = ? FOR UPDATE`,
                 [productId]
             );
 
-            // Deduct from batches
-            for (const batch of batches) {
-                if (reqQty <= 0) break;
-
-                const deduction = Math.min(batch.current_stock_level, reqQty);
-
-                // Update Batch Stock
-                await connection.query(
-                    `UPDATE Inventory_Batches SET current_stock_level = current_stock_level - ? WHERE batch_id = ?`,
-                    [deduction, batch.batch_id]
-                );
-
-                // Record Sale Item
-                await connection.query(
-                    `INSERT INTO Sale_Items (invoice_id, batch_id, quantity, unit_price, item_type, frequency) VALUES (?, ?, ?, ?, ?, ?)`,
-                    [invoiceId, batch.batch_id, deduction, sellingPrice, item.type || 'otc', item.frequency || '']
-                );
-
-                reqQty -= deduction;
-            }
-
-            if (reqQty > 0) {
+            if (!products.length || products[0].current_stock < reqQty) {
                 throw new Error(`Insufficient stock for Product ID ${productId}`);
             }
 
-            // Also deduct from global Product stock tracking (optional but good for consistency)
+            // Deduct from global Product stock tracking
             await connection.query(
                 `UPDATE Products SET current_stock = current_stock - ? WHERE product_id = ?`,
-                [item.quantity, productId]
+                [reqQty, productId]
+            );
+
+            // Record Sale Item
+            await connection.query(
+                `INSERT INTO Sale_Items (invoice_id, product_id, quantity, unit_price, item_type, frequency) VALUES (?, ?, ?, ?, ?, ?)`,
+                [invoiceId, productId, reqQty, sellingPrice, item.type || 'otc', item.frequency || '']
             );
         }
 
@@ -220,17 +200,7 @@ export const searchPosProducts = async (req: AuthRequest, res: Response) => {
 
         const [products] = await pool.query<RowDataPacket[]>(queryStr, queryParams);
 
-        // Let's populate batches for these products
-        for (let prod of products) {
-            const [batches] = await pool.query<RowDataPacket[]>(
-                `SELECT batch_id, batch_number, expiry_date, current_stock_level 
-                 FROM Inventory_Batches 
-                 WHERE product_id = ? AND current_stock_level > 0 
-                 ORDER BY expiry_date ASC`,
-                [prod.product_id]
-            );
-            prod.batches = batches;
-        }
+        // Batches have been removed
 
         res.status(200).json(products);
     } catch (error) {
@@ -256,13 +226,11 @@ export const getInvoiceReceipt = async (req: AuthRequest, res: Response) => {
 
         const invoice = invoices[0];
 
-        // For completed sales, we can query Sale_Items -> Batches -> Products
-        // For drafts, we might also have Sale_Items recorded if batches were assigned.
+        // For completed sales, we can query Sale_Items -> Products
         const [items] = await pool.query<RowDataPacket[]>(
             `SELECT si.sale_item_id, si.quantity, si.unit_price, si.item_type, si.frequency, p.name as product_name, p.product_id
              FROM Sale_Items si
-             JOIN Inventory_Batches ib ON si.batch_id = ib.batch_id
-             JOIN Products p ON ib.product_id = p.product_id
+             JOIN Products p ON si.product_id = p.product_id
              WHERE si.invoice_id = ?`,
             [invoiceId]
         );
@@ -309,22 +277,14 @@ export const deleteInvoice = async (req: AuthRequest, res: Response) => {
         // Only allow reverting Complete or deleting Draft
         if (invoice.status === 'Completed') {
             const [items] = await connection.query<RowDataPacket[]>(
-                `SELECT batch_id, quantity FROM Sale_Items WHERE invoice_id = ?`, [invoiceId]
+                `SELECT product_id, quantity FROM Sale_Items WHERE invoice_id = ?`, [invoiceId]
             );
 
             for (const item of items) {
                 await connection.query(
-                    `UPDATE Inventory_Batches SET current_stock_level = current_stock_level + ? WHERE batch_id = ?`,
-                    [item.quantity, item.batch_id]
+                    `UPDATE Products SET current_stock = current_stock + ? WHERE product_id = ?`,
+                    [item.quantity, item.product_id]
                 );
-
-                const [batchParam] = await connection.query<RowDataPacket[]>(`SELECT product_id FROM Inventory_Batches WHERE batch_id = ?`, [item.batch_id]);
-                if (batchParam.length > 0) {
-                    await connection.query(
-                        `UPDATE Products SET current_stock = current_stock + ? WHERE product_id = ?`,
-                        [item.quantity, batchParam[0].product_id]
-                    );
-                }
             }
         }
 

@@ -30,6 +30,7 @@ async function runSeed() {
     await ensureColumn('Employee', 'base_salary', 'ALTER TABLE Employee ADD COLUMN base_salary DECIMAL(10,2) DEFAULT 0.00');
     await ensureColumn('Employee', 'hourly_rate', 'ALTER TABLE Employee ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT NULL');
     await ensureColumn('Employee', 'standard_deductions', 'ALTER TABLE Employee ADD COLUMN standard_deductions DECIMAL(10,2) DEFAULT 0.00');
+    await ensureColumn('Products', 'selling_price', 'ALTER TABLE Products ADD COLUMN selling_price DECIMAL(10,2) DEFAULT 0.00');
 
     console.log("Seeding Permissions...");
     const permissionsData = [
@@ -61,16 +62,14 @@ async function runSeed() {
         ['Admin', 'System Administrator'],
         ['Head Pharmacist', 'Lead pharmacist and manager'],
         ['Assistant Pharmacist', 'Assists with pharmacy duties'],
-        ['Cashier', 'Frontend point of sale user'],
-        ['Online Shop Manager', 'Manages e-commerce orders'],
-        ['Delivery Guy', 'Handles order deliveries']
+        ['Cashier', 'Frontend point of sale user']
     ];
 
     for (const [name, desc] of rolesData) {
         await pool.query('INSERT IGNORE INTO Role (role_name, description) VALUES (?, ?)', [name, desc]);
     }
 
-    const [adminRows] = await pool.query<RowDataPacket[]>('SELECT role_id FROM Role WHERE role_name = "Admin"');
+    const [adminRows] = await pool.query<RowDataPacket[]>('SELECT role_id FROM Role WHERE role_name = ?', ['Admin']);
     if (adminRows.length > 0) {
         const adminId = adminRows[0].role_id;
         const [allPerms] = await pool.query<RowDataPacket[]>('SELECT perm_id FROM Permission');

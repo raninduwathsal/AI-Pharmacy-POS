@@ -16,13 +16,11 @@ import { cn } from "@/lib/utils";
 interface Supplier { supplier_id: number; name: string; }
 interface ProductSearchResult { product_id: number; name: string; measure_unit: string; }
 
-interface BatchRow {
+interface GRNRow {
     id: string;
     product_id: number | null;
     product_name: string;
-    batch_number: string;
     expiry_date: string;
-    location: string;
     purchased_quantity: number;
     bonus_quantity: number;
     unit_cost: number;
@@ -39,7 +37,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
     const [checkNumber, setCheckNumber] = useState("");
     const [checkDate, setCheckDate] = useState("");
 
-    const [batches, setBatches] = useState<BatchRow[]>([]);
+    const [items, setItems] = useState<GRNRow[]>([]);
 
     const [openSupplierBox, setOpenSupplierBox] = useState(false);
     const [openProductBox, setOpenProductBox] = useState<string | null>(null);
@@ -81,18 +79,18 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
     }, []);
 
     const addRow = () => {
-        setBatches([...batches, {
-            id: crypto.randomUUID(), product_id: null, product_name: "", batch_number: "",
-            expiry_date: "", location: "", purchased_quantity: 0, bonus_quantity: 0, unit_cost: 0
+        setItems([...items, {
+            id: crypto.randomUUID(), product_id: null, product_name: "",
+            expiry_date: "", purchased_quantity: 0, bonus_quantity: 0, unit_cost: 0
         }]);
     };
 
     const removeRow = (id: string) => {
-        setBatches(batches.filter(b => b.id !== id));
+        setItems(items.filter(b => b.id !== id));
     };
 
-    const updateRow = (id: string, field: keyof BatchRow, value: any) => {
-        setBatches(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
+    const updateRow = (id: string, field: keyof GRNRow, value: any) => {
+        setItems(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
     };
 
     const handleProductSearch = async (rowId: string, q: string) => {
@@ -113,17 +111,17 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
         setSearchQueries(prev => ({ ...prev, [rowId]: "" })); // Clear search
     };
 
-    const totalAmount = batches.reduce((sum, b) => sum + (Number(b.purchased_quantity) * Number(b.unit_cost)), 0);
+    const totalAmount = items.reduce((sum, b) => sum + (Number(b.purchased_quantity) * Number(b.unit_cost)), 0);
 
     const handleSubmit = async () => {
-        if (!supplierId || !invoiceNumber || batches.length === 0) {
+        if (!supplierId || !invoiceNumber || items.length === 0) {
             toast({ title: "Validation Error", description: "Supplier, Invoice #, and at least one row are required.", variant: "destructive" });
             return;
         }
 
-        const invalidRow = batches.find(b => !b.product_id || !b.batch_number || !b.expiry_date || b.purchased_quantity <= 0 || b.unit_cost <= 0);
+        const invalidRow = items.find(b => !b.product_id || !b.expiry_date || b.purchased_quantity <= 0 || b.unit_cost <= 0);
         if (invalidRow) {
-            toast({ title: "Validation Error", description: "All rows must have a product, batch #, valid expiry, qty > 0, and cost > 0.", variant: "destructive" });
+            toast({ title: "Validation Error", description: "All rows must have a product, valid expiry, qty > 0, and cost > 0.", variant: "destructive" });
             return;
         }
 
@@ -135,11 +133,9 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                 payment_method: paymentMethod,
                 check_number: paymentMethod === 'Check' ? checkNumber : null,
                 check_date: paymentMethod === 'Check' ? checkDate : null,
-                batches: batches.map(b => ({
+                batches: items.map(b => ({
                     product_id: b.product_id,
-                    batch_number: b.batch_number,
                     expiry_date: b.expiry_date,
-                    location: b.location,
                     purchased_quantity: Number(b.purchased_quantity),
                     bonus_quantity: Number(b.bonus_quantity),
                     unit_cost: Number(b.unit_cost)
@@ -150,7 +146,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
             toast({ title: "GRN Posted", description: `Invoice total ${currency}${res.total_amount.toFixed(2)} recorded.` });
 
             // Reset
-            setSupplierId(""); setInvoiceNumber(""); setPaymentMethod("Cash"); setCheckNumber(""); setCheckDate(""); setBatches([]);
+            setSupplierId(""); setInvoiceNumber(""); setPaymentMethod("Cash"); setCheckNumber(""); setCheckDate(""); setItems([]);
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
@@ -309,9 +305,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                             <TableHeader className="bg-slate-50">
                                 <TableRow>
                                     <TableHead className="w-[300px]">Product</TableHead>
-                                    <TableHead>Batch #</TableHead>
                                     <TableHead>Expiry</TableHead>
-                                    <TableHead>Location</TableHead>
                                     <TableHead className="w-[100px]">Purch. Qty</TableHead>
                                     <TableHead className="w-[100px]">Bonus Qty</TableHead>
                                     <TableHead className="w-[120px]">Unit Cost ({currency})</TableHead>
@@ -320,7 +314,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {batches.map((row) => (
+                                {items.map((row) => (
                                     <TableRow key={row.id}>
                                         <TableCell>
                                             {!row.product_id ? (
@@ -367,13 +361,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                                             )}
                                         </TableCell>
                                         <TableCell>
-                                            <Input value={row.batch_number} onChange={e => updateRow(row.id, "batch_number", e.target.value)} placeholder="B001" />
-                                        </TableCell>
-                                        <TableCell>
                                             <Input type="date" value={row.expiry_date} onChange={e => updateRow(row.id, "expiry_date", e.target.value)} />
-                                        </TableCell>
-                                        <TableCell>
-                                            <Input value={row.location} onChange={e => updateRow(row.id, "location", e.target.value)} placeholder="Shelf A" />
                                         </TableCell>
                                         <TableCell>
                                             <Input type="number" min="0" value={row.purchased_quantity || ''} onChange={e => updateRow(row.id, "purchased_quantity", e.target.value)} />
@@ -394,9 +382,9 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {batches.length === 0 && (
+                                {items.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="text-center py-10 text-slate-500">
+                                        <TableCell colSpan={7} className="text-center py-10 text-slate-500">
                                             Start adding products to this invoice using the Add Row button above.
                                         </TableCell>
                                     </TableRow>
@@ -407,7 +395,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                 </div>
 
                 <div className="flex justify-end pt-4 border-t">
-                    <Button size="lg" className="w-[250px] font-bold text-lg" onClick={handleSubmit} disabled={isSubmitting || batches.length === 0}>
+                    <Button size="lg" className="w-[250px] font-bold text-lg" onClick={handleSubmit} disabled={isSubmitting || items.length === 0}>
                         {isSubmitting ? "Posting..." : "Post GRN Draft"}
                     </Button>
                 </div>

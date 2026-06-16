@@ -36,7 +36,11 @@ CREATE TABLE IF NOT EXISTS Products (
     measure_unit VARCHAR(100) NOT NULL,
     category VARCHAR(100),
     reorder_threshold INT DEFAULT 0,
-    current_stock INT DEFAULT 0
+    current_stock INT DEFAULT 0,
+    selling_price DECIMAL(10,2) DEFAULT 0.00,
+    expiry_dates JSON,
+    unit_cost DECIMAL(10,2) DEFAULT 0.00,
+    location VARCHAR(100)
 );
 
 CREATE TABLE IF NOT EXISTS Suppliers (
@@ -61,19 +65,16 @@ CREATE TABLE IF NOT EXISTS Supplier_Invoices (
     FOREIGN KEY (recorded_by_emp_id) REFERENCES Employee(emp_id) ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS Inventory_Batches (
-    batch_id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS Supplier_Invoice_Items (
+    item_id INT AUTO_INCREMENT PRIMARY KEY,
+    supplier_invoice_id INT NOT NULL,
     product_id INT NOT NULL,
-    supplier_invoice_id INT DEFAULT NULL,
-    batch_number VARCHAR(100) NOT NULL,
-    expiry_date DATE NOT NULL,
-    location VARCHAR(100),
     purchased_quantity INT NOT NULL,
     bonus_quantity INT NOT NULL DEFAULT 0,
     unit_cost DECIMAL(10,2) NOT NULL,
-    current_stock_level INT NOT NULL,
-    FOREIGN KEY (product_id) REFERENCES Products(product_id) ON DELETE RESTRICT,
-    FOREIGN KEY (supplier_invoice_id) REFERENCES Supplier_Invoices(invoice_id) ON DELETE CASCADE
+    expiry_date DATE NOT NULL,
+    FOREIGN KEY (supplier_invoice_id) REFERENCES Supplier_Invoices(invoice_id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES Products(product_id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS Audit_Logs (
@@ -142,11 +143,11 @@ CREATE TABLE IF NOT EXISTS Sales_Invoices (
 CREATE TABLE IF NOT EXISTS Sale_Items (
     sale_item_id INT AUTO_INCREMENT PRIMARY KEY,
     invoice_id INT NOT NULL,
-    batch_id INT NOT NULL,
+    product_id INT NOT NULL,
     quantity INT NOT NULL,
     unit_price DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (invoice_id) REFERENCES Sales_Invoices(invoice_id) ON DELETE CASCADE,
-    FOREIGN KEY (batch_id) REFERENCES Inventory_Batches(batch_id) ON DELETE RESTRICT
+    FOREIGN KEY (product_id) REFERENCES Products(product_id) ON DELETE RESTRICT
 );
 
 -- --- Module 6: Financial Analytics & Payroll ---

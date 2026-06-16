@@ -138,9 +138,9 @@ export const getFinancialAnalytics = async (req: Request, res: Response) => {
 
         // 2. COGS (Cost of Goods Sold)
         const [cogsResult]: any = await pool.query(
-            `SELECT SUM(si.quantity * ib.unit_cost) as cogs 
+            `SELECT SUM(si.quantity * p.unit_cost) as cogs 
              FROM Sale_Items si 
-             JOIN Inventory_Batches ib ON si.batch_id = ib.batch_id
+             JOIN Products p ON si.product_id = p.product_id
              JOIN Sales_Invoices inv ON si.invoice_id = inv.invoice_id
              WHERE inv.status = 'Completed' AND DATE(inv.created_at) >= ? AND DATE(inv.created_at) <= ?`,
             [formattedStart, formattedEnd]
@@ -173,9 +173,9 @@ export const getFinancialAnalytics = async (req: Request, res: Response) => {
                 ), 0) + COALESCE((
                     SELECT SUM(gross_pay) FROM Payroll p WHERE p.payment_date = d.dte
                 ), 0) + COALESCE((
-                     SELECT SUM(si.quantity * ib.unit_cost) 
+                     SELECT SUM(si.quantity * p.unit_cost) 
                      FROM Sale_Items si 
-                     JOIN Inventory_Batches ib ON si.batch_id = ib.batch_id
+                     JOIN Products p ON si.product_id = p.product_id
                      JOIN Sales_Invoices sinv ON si.invoice_id = sinv.invoice_id
                      WHERE sinv.status = 'Completed' AND DATE(sinv.created_at) = d.dte
                 ), 0) as expenses

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { API_BASE_URL } from '@/lib/api';
 import { DollarSign, TrendingDown, TrendingUp, Calendar as CalendarIcon, Wallet, ArrowRightLeft } from 'lucide-react';
 
 interface AnalyticsData {
@@ -29,7 +30,7 @@ export default function FinancialAnalytics({ currency = '$' }: { currency?: stri
     const fetchData = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`http://localhost:5000/api/admin/financial-analytics?start_date=${startDate}&end_date=${endDate}`, {
+            const res = await fetch(`${API_BASE_URL}/admin/financial-analytics?start_date=${startDate}&end_date=${endDate}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
