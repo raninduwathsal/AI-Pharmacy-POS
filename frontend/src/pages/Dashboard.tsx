@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '@/lib/api';
+import { Spinner } from '@/components/ui/spinner';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -160,7 +161,14 @@ export default function Dashboard() {
         navigate('/login');
     };
 
-    if (isLoading) return <div className="p-8 text-center text-lg">Loading Dashboard...</div>;
+    if (isLoading) return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+            <div className="flex flex-col items-center gap-4">
+                <Spinner size={40} className="text-blue-600" />
+                <div className="text-lg font-medium text-slate-600 dark:text-slate-300">Loading Dashboard...</div>
+            </div>
+        </div>
+    );
 
     const userPerms: string[] = user.permissions || [];
     const canManageRoles = userPerms.includes('MANAGE_ROLES');
@@ -205,7 +213,7 @@ export default function Dashboard() {
 
                     {canManageRoles && (
                         <TabsContent value="rbac">
-                            <Card className="shadow-sm">
+                            <Card className="shadow-sm animate-in fade-in zoom-in-95 duration-300">
                                 <CardHeader>
                                     <CardTitle>Role & Permission Manager GUI</CardTitle>
                                 </CardHeader>
@@ -255,7 +263,7 @@ export default function Dashboard() {
 
                     {canManageRoles && (
                         <TabsContent value="settings">
-                            <Card className="shadow-sm">
+                            <Card className="shadow-sm animate-in fade-in zoom-in-95 duration-300">
                                 <CardHeader>
                                     <CardTitle>Pharmacy Layout Settings</CardTitle>
                                 </CardHeader>
@@ -268,7 +276,7 @@ export default function Dashboard() {
 
                     {canViewInventory && (
                         <TabsContent value="inventory">
-                            <Card className="shadow-sm">
+                            <Card className="shadow-sm animate-in fade-in zoom-in-95 duration-300">
                                 <CardContent className="p-6">
                                     <InventoryTab currency={settings.currency || '$'} />
                                 </CardContent>
@@ -278,7 +286,7 @@ export default function Dashboard() {
 
                     {canViewSuppliers && (
                         <TabsContent value="suppliers">
-                            <Card className="shadow-sm">
+                            <Card className="shadow-sm animate-in fade-in zoom-in-95 duration-300">
                                 <CardContent className="p-6">
                                     <SuppliersTab />
                                 </CardContent>
@@ -288,7 +296,7 @@ export default function Dashboard() {
 
                     {canViewGRN && (
                         <TabsContent value="grn">
-                            <div className="bg-white rounded-xl border shadow-sm p-6">
+                            <div className="bg-white rounded-xl border shadow-sm p-6 animate-in fade-in zoom-in-95 duration-300">
                                 <GRNTab currency={settings.currency || '$'} />
                             </div>
                         </TabsContent>
@@ -296,7 +304,7 @@ export default function Dashboard() {
 
                     {canViewFinance && (
                         <TabsContent value="finance">
-                            <Card className="shadow-sm">
+                            <Card className="shadow-sm animate-in fade-in zoom-in-95 duration-300">
                                 <CardContent className="p-6">
                                     <FinanceTab
                                         currency={settings.currency || '$'}
@@ -327,7 +335,7 @@ export default function Dashboard() {
 
                     {canViewPOS && (
                         <TabsContent value="pos">
-                            <div className="bg-white rounded-xl border shadow-sm p-6">
+                            <div className="bg-white rounded-xl border shadow-sm p-6 animate-in fade-in zoom-in-95 duration-300">
                                 <PosTab currency={settings.currency || '$'} canManageSales={userPerms.includes('EDIT_PAST_SALES')} />
                             </div>
                         </TabsContent>

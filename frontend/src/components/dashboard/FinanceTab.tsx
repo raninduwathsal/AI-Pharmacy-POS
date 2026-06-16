@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface PendingCheck {
     invoice_id: number;
@@ -203,7 +204,16 @@ export default function FinanceTab({
         }
     };
 
-    if (isLoading) return <div>Loading Finance Data...</div>;
+    if (isLoading) return (
+        <div className="space-y-6">
+            <Skeleton className="h-32 w-full" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Skeleton className="h-80 col-span-2" />
+                <Skeleton className="h-80" />
+            </div>
+            <Skeleton className="h-64 w-full" />
+        </div>
+    );
 
     return (
         <div className="space-y-8">

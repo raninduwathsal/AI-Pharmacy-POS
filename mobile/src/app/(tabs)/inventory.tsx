@@ -3,13 +3,16 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
+import { Skeleton } from '../components/ui/Skeleton';
 
 export default function InventoryScreen() {
   const [products, setProducts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       const loadData = async () => {
+        setIsLoading(true);
         const baseUrl = await AsyncStorage.getItem('backend_url');
         const token = await AsyncStorage.getItem('token');
         if (baseUrl && token) {
@@ -21,10 +24,24 @@ export default function InventoryScreen() {
             if (res.ok) setProducts(data);
           } catch(e) {}
         }
+        setIsLoading(false);
       };
       loadData();
     }, [])
   );
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        {[1,2,3,4,5].map(key => (
+           <View key={key} style={styles.card}>
+             <Skeleton height={20} width="60%" style={{ marginBottom: 10 }} />
+             <Skeleton height={15} width="40%" />
+           </View>
+        ))}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

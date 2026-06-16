@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Product {
     product_id: number;
@@ -91,7 +92,20 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
         }
     };
 
-    if (isLoading) return <div>Loading Inventory...</div>;
+    if (isLoading) return (
+        <div className="space-y-6">
+            <div className="flex justify-between">
+                <Skeleton className="h-8 w-1/4" />
+                <Skeleton className="h-10 w-32" />
+            </div>
+            <div className="space-y-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+            </div>
+        </div>
+    );
 
     return (
         <div className="space-y-8">

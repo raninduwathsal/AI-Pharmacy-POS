@@ -4,6 +4,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
@@ -37,7 +38,7 @@ export default function Login() {
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
-            <Card className="w-full max-w-md">
+            <Card className="w-full max-w-md animate-in fade-in zoom-in-95 duration-300">
                 <CardHeader>
                     <CardTitle className="text-2xl text-center">Pharmacy POS</CardTitle>
                     <CardDescription className="text-center">Enter your credentials to login</CardDescription>
@@ -68,7 +69,14 @@ export default function Login() {
                     </CardContent>
                     <CardFooter className="flex flex-col space-y-4">
                         <Button type="submit" className="w-full" disabled={isLoading}>
-                            {isLoading ? 'Logging in...' : 'Login'}
+                            {isLoading ? (
+                                <>
+                                    <Spinner className="mr-2 h-4 w-4 text-white" />
+                                    Logging in...
+                                </>
+                            ) : (
+                                'Login'
+                            )}
                         </Button>
                         <div className="text-sm text-center">
                             Don't have an account? <Link to="/register" className="text-primary hover:underline">Register</Link>

@@ -3,13 +3,16 @@ import { useState, useCallback } from 'react';
 import { Calendar } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
+import { Skeleton } from '../components/ui/Skeleton';
 
 export default function FinanceScreen() {
   const [markedDates, setMarkedDates] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       const loadChecks = async () => {
+        setIsLoading(true);
         const baseUrl = await AsyncStorage.getItem('backend_url');
         const token = await AsyncStorage.getItem('token');
         if (baseUrl && token) {
@@ -26,8 +29,10 @@ export default function FinanceScreen() {
               });
               setMarkedDates(dates);
             }
+            }
           } catch(e) {}
         }
+        setIsLoading(false);
       };
       loadChecks();
     }, [])
@@ -37,14 +42,21 @@ export default function FinanceScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Pending Checks Tracker</Text>
       <View style={styles.calendarCard}>
-        <Calendar
-          markedDates={markedDates}
-          theme={{
-            todayTextColor: '#2563eb',
-            arrowColor: '#2563eb',
-            dotColor: '#ef4444',
-          }}
-        />
+        {isLoading ? (
+           <View style={{ gap: 10, padding: 20 }}>
+             <Skeleton height={30} width="100%" />
+             <Skeleton height={250} width="100%" />
+           </View>
+        ) : (
+          <Calendar
+            markedDates={markedDates}
+            theme={{
+              todayTextColor: '#2563eb',
+              arrowColor: '#2563eb',
+              dotColor: '#ef4444',
+            }}
+          />
+        )}
       </View>
     </View>
   );
