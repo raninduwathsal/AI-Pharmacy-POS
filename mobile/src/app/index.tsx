@@ -20,7 +20,7 @@ export default function ConfigScreen() {
       }
     };
     checkConfig();
-  }, []);
+  }, [router]);
 
   const saveUrl = async () => {
     if (!url) return;

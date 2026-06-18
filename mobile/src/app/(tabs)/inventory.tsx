@@ -1,13 +1,14 @@
-import { View, Text, StyleSheet, FlatList } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput } from 'react-native';
+import { useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
-import { Skeleton } from '../components/ui/Skeleton';
+import { Skeleton } from '../../components/ui/Skeleton';
+import Fuse from 'fuse.js';
 
 export default function InventoryScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -22,7 +23,7 @@ export default function InventoryScreen() {
             });
             const data = await res.json();
             if (res.ok) setProducts(data);
-          } catch(e) {}
+          } catch (e) { console.error(e); }
         }
         setIsLoading(false);
       };
@@ -43,10 +44,25 @@ export default function InventoryScreen() {
     );
   }
 
+  const fuse = new Fuse(products, {
+    keys: ['name'],
+    threshold: 0.3
+  });
+
+  const filteredProducts = searchQuery
+    ? fuse.search(searchQuery).map(result => result.item)
+    : products;
+
   return (
     <View style={styles.container}>
+      <TextInput
+        style={styles.searchInput}
+        placeholder="Search inventory..."
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+      />
       <FlatList
-        data={products}
+        data={filteredProducts}
         keyExtractor={item => item.product_id.toString()}
         renderItem={({item}) => (
           <View style={styles.card}>
@@ -61,6 +77,7 @@ export default function InventoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 10 },
+  searchInput: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: '#e5e7eb', fontSize: 16 },
   card: { padding: 15, backgroundColor: '#fff', marginBottom: 10, borderRadius: 5, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
   name: { fontSize: 16, fontWeight: 'bold' }
 });

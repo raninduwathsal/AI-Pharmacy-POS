@@ -24,7 +24,7 @@ export default function CameraScreen() {
     if (cameraRef.current) {
       try {
         setIsUploading(true);
-        const photo = await cameraRef.current.takePictureAsync({ base64: false });
+        const photo = await cameraRef.current.takePictureAsync({ base64: false, quality: 0.3 });
         if (!photo) throw new Error('No photo taken');
 
         const baseUrl = await AsyncStorage.getItem('backend_url');
@@ -47,7 +47,8 @@ export default function CameraScreen() {
         if (res.ok) {
           Alert.alert('Success', 'Photo uploaded and sent to web app!');
         } else {
-          Alert.alert('Error', 'Failed to upload photo');
+          const errText = await res.text();
+          Alert.alert('Error', `Failed to upload photo: ${res.status} ${errText}`);
         }
       } catch (error: any) {
         Alert.alert('Error', error.message);

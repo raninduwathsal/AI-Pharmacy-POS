@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 import { Calendar } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
-import { Skeleton } from '../components/ui/Skeleton';
+import { Skeleton } from '../../components/ui/Skeleton';
 
 export default function FinanceScreen() {
   const [markedDates, setMarkedDates] = useState<any>({});
@@ -29,8 +29,9 @@ export default function FinanceScreen() {
               });
               setMarkedDates(dates);
             }
-            }
-          } catch(e) {}
+          } catch(e) {
+            console.error("Error loading pending checks:", e);
+          }
         }
         setIsLoading(false);
       };

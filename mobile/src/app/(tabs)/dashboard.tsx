@@ -2,7 +2,6 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io, Socket } from 'socket.io-client';
-import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -27,8 +26,14 @@ export default function DashboardScreen() {
       const baseUrl = await AsyncStorage.getItem('backend_url');
       if (baseUrl) {
         const socketUrl = baseUrl.replace('/api', '');
-        socket = io(socketUrl);
+        socket = io(socketUrl, {
+          transports: ['websocket']
+        });
         
+        socket.on('connect', () => {
+          console.log('Connected to socket server');
+        });
+
         socket.on('inventory_alert', (data) => {
           setAlerts(prev => [{
             id: Date.now().toString() + Math.random(),
@@ -36,10 +41,6 @@ export default function DashboardScreen() {
             isRead: false,
             snoozedUntil: null
           }, ...prev]);
-          Notifications.scheduleNotificationAsync({
-            content: { title: 'Inventory Alert', body: data.message },
-            trigger: null,
-          });
         });
         
         socket.on('finance_alert', (data) => {
@@ -49,10 +50,6 @@ export default function DashboardScreen() {
             isRead: false,
             snoozedUntil: null
           }, ...prev]);
-          Notifications.scheduleNotificationAsync({
-            content: { title: 'Finance Alert', body: data.message },
-            trigger: null,
-          });
         });
       }
     };
