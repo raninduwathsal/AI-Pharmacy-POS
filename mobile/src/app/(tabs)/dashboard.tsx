@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io, Socket } from 'socket.io-client';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Alert } from 'react-native';
 
 type AlertItem = {
   id: string;
@@ -14,8 +15,85 @@ type AlertItem = {
 
 export default function DashboardScreen() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   
+  const fetchInitialAlerts = useCallback(async () => {
+    try {
+      const baseUrl = await AsyncStorage.getItem('backend_url');
+      const token = await AsyncStorage.getItem('token');
+      if (!baseUrl || !token) return;
+
+      const headers = { 'Authorization': `Bearer ${token}` };
+      let fetchedAlerts: AlertItem[] = [];
+
+      // Fetch Inventory Alerts
+      const invRes = await fetch(`${baseUrl}/inventory/alerts`, { headers });
+      if (invRes.ok) {
+        const invData = await invRes.json();
+        const lowStockCount = (invData.lowStock || []).length;
+        const nearExpiryCount = (invData.nearExpiry || []).length;
+        
+        if (lowStockCount > 0) {
+          fetchedAlerts.push({
+            id: `ls-initial`,
+            message: `Inventory: ${lowStockCount} items are low on stock.`,
+            isRead: false,
+            snoozedUntil: null
+          });
+        }
+        if (nearExpiryCount > 0) {
+          fetchedAlerts.push({
+            id: `ne-initial`,
+            message: `Inventory: ${nearExpiryCount} items are nearing expiry.`,
+            isRead: false,
+            snoozedUntil: null
+          });
+        }
+      } else {
+        const errText = await invRes.text();
+        Alert.alert('Inventory Fetch Error', `Status: ${invRes.status}\n${errText}`);
+      }
+
+      // Fetch Finance Alerts
+      const finRes = await fetch(`${baseUrl}/finance/pending-checks`, { headers });
+      if (finRes.ok) {
+        const checksData = await finRes.json();
+        const now = new Date();
+        const in7Days = new Date();
+        in7Days.setDate(now.getDate() + 7);
+        
+        const upcomingOrOverdue = (checksData || []).filter((check: any) => {
+            const checkDate = new Date(check.check_date);
+            return checkDate <= in7Days;
+        });
+
+        if (upcomingOrOverdue.length > 0) {
+          fetchedAlerts.push({
+            id: `fin-initial`,
+            message: `Finance: ${upcomingOrOverdue.length} upcoming or overdue checks.`,
+            isRead: false,
+            snoozedUntil: null
+          });
+        }
+      } else {
+        const errText = await finRes.text();
+        Alert.alert('Finance Fetch Error', `Status: ${finRes.status}\n${errText}`);
+      }
+      
+      setAlerts(prev => {
+          const dynamicAlerts = prev.filter(a => !['ls-initial', 'ne-initial', 'fin-initial'].includes(a.id));
+          return [...fetchedAlerts, ...dynamicAlerts];
+      });
+    } catch (error) {
+      console.error("Failed to fetch initial alerts", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInitialAlerts();
+  }, [fetchInitialAlerts]);
+
   useEffect(() => {
     let socket: Socket;
     
@@ -72,8 +150,19 @@ export default function DashboardScreen() {
 
   const visibleAlerts = alerts.filter(a => !a.snoozedUntil || a.snoozedUntil < Date.now());
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchInitialAlerts();
+    setRefreshing(false);
+  }, [fetchInitialAlerts]);
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <TouchableOpacity 
         style={styles.cameraButton} 
         onPress={() => router.push('/(tabs)/camera')}
