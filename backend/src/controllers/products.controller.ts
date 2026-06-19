@@ -20,7 +20,7 @@ export const searchProducts = async (req: Request, res: Response) => {
         if (!query) return res.status(200).json([]);
 
         const [rows] = await pool.query<RowDataPacket[]>(
-            'SELECT product_id, name, measure_unit FROM Products WHERE name LIKE ? LIMIT 20',
+            'SELECT product_id, name, measure_unit, current_stock, expiry_dates FROM Products WHERE name LIKE ? LIMIT 20',
             [`%${query}%`]
         );
         res.status(200).json(rows);

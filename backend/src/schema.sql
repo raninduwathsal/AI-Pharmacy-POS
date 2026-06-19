@@ -92,6 +92,16 @@ CREATE TABLE IF NOT EXISTS App_Settings (
     description TEXT
 );
 
+CREATE TABLE IF NOT EXISTS Employee_Read_Alerts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    emp_id INT NOT NULL,
+    alert_id VARCHAR(100) NOT NULL,
+    message TEXT NOT NULL,
+    read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (emp_id, alert_id),
+    FOREIGN KEY (emp_id) REFERENCES Employee(emp_id) ON DELETE CASCADE
+);
+
 -- --- Module 1: Sale & Billing (POS) ---
 
 CREATE TABLE IF NOT EXISTS Patients (

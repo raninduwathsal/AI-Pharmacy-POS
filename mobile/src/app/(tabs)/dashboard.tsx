@@ -27,27 +27,44 @@ export default function DashboardScreen() {
       const headers = { 'Authorization': `Bearer ${token}` };
       let fetchedAlerts: AlertItem[] = [];
 
+      // Fetch Read Alerts History
+      let readAlertsList: any[] = [];
+      const readRes = await fetch(`${baseUrl}/alerts/read`, { headers });
+      if (readRes.ok) {
+        readAlertsList = await readRes.json();
+      }
+      const readIds = new Set(readAlertsList.map(r => r.alert_id));
+
       // Fetch Inventory Alerts
       const invRes = await fetch(`${baseUrl}/inventory/alerts`, { headers });
       if (invRes.ok) {
         const invData = await invRes.json();
-        const lowStockCount = (invData.lowStock || []).length;
-        const nearExpiryCount = (invData.nearExpiry || []).length;
         
-        if (lowStockCount > 0) {
-          fetchedAlerts.push({
-            id: `ls-initial`,
-            message: `Inventory: ${lowStockCount} items are low on stock.`,
-            isRead: false,
-            snoozedUntil: null
+        if (invData.lowStock && invData.lowStock.length > 0) {
+          invData.lowStock.forEach((item: any) => {
+            const id = `ls-${item.product_id}`;
+            if (!readIds.has(id)) {
+              fetchedAlerts.push({
+                id,
+                message: `Low Stock: ${item.name} (${item.current_stock_level} left)`,
+                isRead: false,
+                snoozedUntil: null
+              });
+            }
           });
         }
-        if (nearExpiryCount > 0) {
-          fetchedAlerts.push({
-            id: `ne-initial`,
-            message: `Inventory: ${nearExpiryCount} items are nearing expiry.`,
-            isRead: false,
-            snoozedUntil: null
+        
+        if (invData.nearExpiry && invData.nearExpiry.length > 0) {
+          invData.nearExpiry.forEach((item: any) => {
+            const id = `ne-${item.product_id}`;
+            if (!readIds.has(id)) {
+              fetchedAlerts.push({
+                id,
+                message: `Expiry Alert: ${item.name} expires on ${item.expiring_dates.join(', ')}`,
+                isRead: false,
+                snoozedUntil: null
+              });
+            }
           });
         }
       } else {
@@ -69,22 +86,30 @@ export default function DashboardScreen() {
         });
 
         if (upcomingOrOverdue.length > 0) {
-          fetchedAlerts.push({
-            id: `fin-initial`,
-            message: `Finance: ${upcomingOrOverdue.length} upcoming or overdue checks.`,
-            isRead: false,
-            snoozedUntil: null
-          });
+          const id = `fin-initial`;
+          if (!readIds.has(id)) {
+            fetchedAlerts.push({
+              id,
+              message: `Finance: ${upcomingOrOverdue.length} upcoming or overdue checks.`,
+              isRead: false,
+              snoozedUntil: null
+            });
+          }
         }
       } else {
         const errText = await finRes.text();
         Alert.alert('Finance Fetch Error', `Status: ${finRes.status}\n${errText}`);
       }
+
+      // Map History
+      const historyAlerts: AlertItem[] = readAlertsList.map(r => ({
+        id: r.alert_id,
+        message: r.message,
+        isRead: true,
+        snoozedUntil: null
+      }));
       
-      setAlerts(prev => {
-          const dynamicAlerts = prev.filter(a => !['ls-initial', 'ne-initial', 'fin-initial'].includes(a.id));
-          return [...fetchedAlerts, ...dynamicAlerts];
-      });
+      setAlerts([...fetchedAlerts, ...historyAlerts]);
     } catch (error) {
       console.error("Failed to fetch initial alerts", error);
     }
@@ -139,8 +164,26 @@ export default function DashboardScreen() {
     };
   }, []);
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string, message: string) => {
+    // Optimistic local update
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, isRead: true } : a));
+
+    try {
+      const baseUrl = await AsyncStorage.getItem('backend_url');
+      const token = await AsyncStorage.getItem('token');
+      if (baseUrl && token) {
+        await fetch(`${baseUrl}/alerts/read`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ alert_id: id, message })
+        });
+      }
+    } catch (e) {
+       console.error("Failed to mark as read", e);
+    }
   };
 
   const snoozeAlert = (id: string) => {
@@ -149,6 +192,8 @@ export default function DashboardScreen() {
   };
 
   const visibleAlerts = alerts.filter(a => !a.snoozedUntil || a.snoozedUntil < Date.now());
+  const activeAlerts = visibleAlerts.filter(a => !a.isRead);
+  const readAlerts = visibleAlerts.filter(a => a.isRead);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -172,24 +217,34 @@ export default function DashboardScreen() {
       </TouchableOpacity>
 
       <Text style={styles.title}>Dashboard Alerts</Text>
-      {visibleAlerts.length === 0 && <Text style={styles.none}>No recent alerts</Text>}
-      {visibleAlerts.map(alert => (
-        <View key={alert.id} style={[styles.alertCard, alert.isRead && styles.alertCardRead]}>
-          <Text style={[styles.alertText, alert.isRead && styles.alertTextRead]}>{alert.message}</Text>
-          {!alert.isRead && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => markAsRead(alert.id)}>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#166534" />
-                <Text style={styles.readBtnText}>Mark Read</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => snoozeAlert(alert.id)}>
-                <Ionicons name="time-outline" size={20} color="#854d0e" />
-                <Text style={styles.snoozeBtnText}>Snooze 5m</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+      {activeAlerts.length === 0 && <Text style={styles.none}>No recent alerts</Text>}
+      {activeAlerts.map(alert => (
+        <View key={alert.id} style={styles.alertCard}>
+          <Text style={styles.alertText}>{alert.message}</Text>
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => markAsRead(alert.id, alert.message)}>
+              <Ionicons name="checkmark-circle-outline" size={20} color="#166534" />
+              <Text style={styles.readBtnText}>Mark Read</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => snoozeAlert(alert.id)}>
+              <Ionicons name="time-outline" size={20} color="#854d0e" />
+              <Text style={styles.snoozeBtnText}>Snooze 5m</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ))}
+
+      {readAlerts.length > 0 && (
+        <>
+          <Text style={[styles.title, { marginTop: 20, fontSize: 18, color: '#6b7280' }]}>Recent History</Text>
+          {readAlerts.map(alert => (
+            <View key={alert.id} style={[styles.alertCard, styles.alertCardRead]}>
+              <Text style={[styles.alertText, styles.alertTextRead]}>{alert.message}</Text>
+            </View>
+          ))}
+        </>
+      )}
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
@@ -205,7 +260,7 @@ const styles = StyleSheet.create({
   actionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.5)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 5 },
   readBtnText: { marginLeft: 5, color: '#166534', fontWeight: 'bold' },
   snoozeBtnText: { marginLeft: 5, color: '#854d0e', fontWeight: 'bold' },
-  none: { color: '#666', fontStyle: 'italic' },
+  none: { color: '#666', fontStyle: 'italic', marginBottom: 20 },
   cameraButton: {
     backgroundColor: '#2563eb',
     padding: 30,

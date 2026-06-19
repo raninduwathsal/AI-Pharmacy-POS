@@ -53,11 +53,14 @@ app.post('/api/inventory/receive', authenticateToken, hasPermission('VIEW_TAB_GR
 app.get('/api/inventory/alerts', authenticateToken, hasPermission('VIEW_TAB_INVENTORY'), getAlerts);
 app.get('/api/inventory/grn-history', authenticateToken, hasPermission('VIEW_TAB_GRN'), getGrnHistory);
 
-// --- Batches Routes Removed ---
-
 // --- Finance Routes ---
 app.get('/api/finance/pending-checks', authenticateToken, hasPermission('VIEW_TAB_FINANCE'), getPendingChecks);
 app.patch('/api/finance/checks/:id/clear', authenticateToken, hasPermission('VIEW_TAB_FINANCE'), clearCheck);
+
+// --- Alerts Routes ---
+import { markAsRead, getReadAlerts } from './controllers/alerts.controller';
+app.post('/api/alerts/read', authenticateToken, markAsRead);
+app.get('/api/alerts/read', authenticateToken, getReadAlerts);
 
 // --- Settings Routes ---
 import { getSettings, updateSetting } from './controllers/settings.controller';
