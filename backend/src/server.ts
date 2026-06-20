@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import { register, login } from './controllers/auth.controller';
 import { getAllRoles, getAllPermissions, updateRolePermissions } from './controllers/rbac.controller';
 import { authenticateToken, hasPermission } from './middleware/auth';
+import pool from './db';
 
 const app = express();
 export const server = createServer(app);
