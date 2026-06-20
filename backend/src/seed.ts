@@ -62,7 +62,8 @@ async function runSeed() {
         ['Admin', 'System Administrator'],
         ['Head Pharmacist', 'Lead pharmacist and manager'],
         ['Assistant Pharmacist', 'Assists with pharmacy duties'],
-        ['Cashier', 'Frontend point of sale user']
+        ['Cashier', 'Frontend point of sale user'],
+        ['Mobile Staff', 'Mobile companion app user']
     ];
 
     for (const [name, desc] of rolesData) {
@@ -84,6 +85,25 @@ async function runSeed() {
         await pool.query(
             'INSERT IGNORE INTO Employee (name, email, password_hash, role_id) VALUES (?, ?, ?, ?)',
             ['System Admin', 'admin@pharmacy.com', password_hash, adminId]
+        );
+    }
+
+    const [mobileStaffRows] = await pool.query<RowDataPacket[]>('SELECT role_id FROM Role WHERE role_name = ?', ['Mobile Staff']);
+    if (mobileStaffRows.length > 0) {
+        const mobileStaffId = mobileStaffRows[0].role_id;
+        const mobilePerms = ['VIEW_TAB_INVENTORY', 'VIEW_TAB_FINANCE', 'VIEW_TAB_GRN'];
+        for (const permName of mobilePerms) {
+            const [permRows] = await pool.query<RowDataPacket[]>('SELECT perm_id FROM Permission WHERE action_name = ?', [permName]);
+            if (permRows.length > 0) {
+                await pool.query('INSERT IGNORE INTO Role_Permission (role_id, perm_id) VALUES (?, ?)', [mobileStaffId, permRows[0].perm_id]);
+            }
+        }
+
+        console.log("Creating default Mobile Staff user...");
+        const mobile_password_hash = await bcrypt.hash('mobile@pharmacy.com', 10);
+        await pool.query(
+            'INSERT IGNORE INTO Employee (name, email, password_hash, role_id) VALUES (?, ?, ?, ?)',
+            ['Mobile User', 'mobile@pharmacy.com', mobile_password_hash, mobileStaffId]
         );
     }
 
