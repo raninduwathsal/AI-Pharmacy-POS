@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import Papa from 'papaparse';
 
 interface Product {
     product_id: number;
@@ -30,12 +31,14 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
     const [products, setProducts] = useState<Product[]>([]);
     const [alerts, setAlerts] = useState<AlertData>({ lowStock: [], nearExpiry: [] });
     const [isLoading, setIsLoading] = useState(true);
+    const [isImporting, setIsImporting] = useState(false);
 
     // Product Form State
     const [isProductOpen, setIsProductOpen] = useState(false);
     const [productForm, setProductForm] = useState({ id: 0, name: '', measure_unit: '', category: '', reorder_threshold: 0, current_stock: 0, selling_price: 0, expiry_dates: '', unit_cost: 0, location: '' });
 
     const { toast } = useToast();
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const loadData = async () => {
         try {
@@ -54,6 +57,116 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
     };
 
     useEffect(() => { loadData(); }, []);
+
+    // --- Import / Export Handlers ---
+    const handleExport = () => {
+        const exportData = products.map(p => {
+            let dates = [];
+            try { dates = Array.isArray(p.expiry_dates) ? p.expiry_dates : (typeof p.expiry_dates === 'string' ? JSON.parse(p.expiry_dates) : []); } catch(e) {}
+            return {
+                name: p.name,
+                measure_unit: p.measure_unit,
+                category: p.category || '',
+                reorder_threshold: p.reorder_threshold,
+                current_stock: p.current_stock,
+                selling_price: p.selling_price,
+                unit_cost: p.unit_cost || 0,
+                location: p.location || '',
+                expiry_dates: dates.join(', ') // Commas inside quotes, handled automatically by PapaParse
+            };
+        });
+        const csvStr = Papa.unparse(exportData);
+        const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvStr);
+        const exportFileDefaultName = `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`;
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    };
+
+    const handleImportClick = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results) => {
+                if (results.errors.length > 0) {
+                    toast({ title: 'Error', description: 'Failed to parse CSV file.', variant: 'destructive' });
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                    return;
+                }
+                
+                setIsImporting(true);
+                let successCount = 0;
+                let errorCount = 0;
+                let updateCount = 0;
+                const rows = results.data as any[];
+
+                for (const item of rows) {
+                    try {
+                        if (!item.name || !item.measure_unit) {
+                            errorCount++;
+                            continue;
+                        }
+
+                        let parsedDates: string[] = [];
+                        if (item.expiry_dates) {
+                            parsedDates = item.expiry_dates.split(',').map((d: string) => d.trim()).filter((d: string) => d.length > 0);
+                        }
+
+                        const existing = products.find(p => p.name.toLowerCase() === item.name.toLowerCase() && p.measure_unit.toLowerCase() === item.measure_unit.toLowerCase());
+
+                        if (existing) {
+                            let existingDates: string[] = [];
+                            try { existingDates = Array.isArray(existing.expiry_dates) ? existing.expiry_dates : (typeof existing.expiry_dates === 'string' ? JSON.parse(existing.expiry_dates) : []); } catch(err) {}
+                            
+                            const payload = {
+                                ...existing,
+                                category: item.category || existing.category,
+                                reorder_threshold: Number(item.reorder_threshold) || existing.reorder_threshold,
+                                current_stock: existing.current_stock + (Number(item.current_stock) || 0), // Add stock
+                                selling_price: Number(item.selling_price) || existing.selling_price,
+                                unit_cost: Number(item.unit_cost) || existing.unit_cost,
+                                expiry_dates: Array.from(new Set([...existingDates, ...parsedDates])),
+                                location: item.location || existing.location
+                            };
+                            await fetchWithAuth(`/products/${existing.product_id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                            updateCount++;
+                        } else {
+                            const payload = {
+                                name: item.name,
+                                measure_unit: item.measure_unit,
+                                category: item.category,
+                                reorder_threshold: Number(item.reorder_threshold || 0),
+                                current_stock: Number(item.current_stock || 0),
+                                selling_price: Number(item.selling_price || 0),
+                                unit_cost: Number(item.unit_cost || 0),
+                                expiry_dates: parsedDates,
+                                location: item.location || ''
+                            };
+                            await fetchWithAuth('/products', { method: 'POST', body: JSON.stringify(payload) });
+                            successCount++;
+                        }
+                    } catch (err) {
+                        console.error('Import error for item', item.name, err);
+                        errorCount++;
+                    }
+                }
+                toast({ title: 'Import Complete', description: `Added: ${successCount}. Updated: ${updateCount}. Errors: ${errorCount}` });
+                loadData();
+                setIsImporting(false);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            }
+        });
+    };
 
     // --- Product Handlers ---
     const handleProductSubmit = async (e: React.FormEvent) => {
@@ -138,16 +251,22 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
             <div className="space-y-4">
                 <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold">Products Catalog</h2>
-                    <Dialog open={isProductOpen} onOpenChange={setIsProductOpen}>
-                        <DialogTrigger asChild>
-                            <Button onClick={() => { setProductForm({ id: 0, name: '', measure_unit: '', category: '', reorder_threshold: 0, current_stock: 0, selling_price: 0, expiry_dates: '', unit_cost: 0, location: '' }); setIsProductOpen(true); }}>
-                                Add Product
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>{productForm.id ? 'Edit Product' : 'New Product'}</DialogTitle>
-                            </DialogHeader>
+                    <div className="flex items-center space-x-2">
+                        <input type="file" accept=".csv" style={{ display: 'none' }} ref={fileInputRef} onChange={handleFileChange} />
+                        <Button variant="outline" onClick={handleExport} disabled={isImporting}>Export</Button>
+                        <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
+                            {isImporting ? 'Importing...' : 'Import'}
+                        </Button>
+                        <Dialog open={isProductOpen} onOpenChange={setIsProductOpen}>
+                            <DialogTrigger asChild>
+                                <Button onClick={() => { setProductForm({ id: 0, name: '', measure_unit: '', category: '', reorder_threshold: 0, current_stock: 0, selling_price: 0, expiry_dates: '', unit_cost: 0, location: '' }); setIsProductOpen(true); }}>
+                                    Add Product
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>{productForm.id ? 'Edit Product' : 'New Product'}</DialogTitle>
+                                </DialogHeader>
                             <form onSubmit={handleProductSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
                                 <div className="space-y-2">
                                     <Label>Name</Label>
@@ -189,6 +308,7 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
                             </form>
                         </DialogContent>
                     </Dialog>
+                    </div>
                 </div>
 
                 <Table>

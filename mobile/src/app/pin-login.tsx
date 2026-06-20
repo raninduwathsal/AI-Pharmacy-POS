@@ -70,6 +70,7 @@ export default function PinLoginScreen() {
       <TextInput
         style={styles.input}
         placeholder="****"
+        placeholderTextColor="#666"
         value={pin}
         onChangeText={setPin}
         keyboardType="numeric"
@@ -100,7 +101,7 @@ export default function PinLoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 10, marginVertical: 10, borderRadius: 5, textAlign: 'center', fontSize: 24, letterSpacing: 10 },
+  input: { borderWidth: 1, borderColor: '#ccc', padding: 10, marginVertical: 10, borderRadius: 5, textAlign: 'center', fontSize: 24, letterSpacing: 10, color: '#000' },
   loginBtn: { backgroundColor: '#2563eb', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   loginBtnDisabled: { opacity: 0.7 },
   loginBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 }

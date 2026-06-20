@@ -8,7 +8,7 @@ export default function TabLayout() {
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('token');
-    router.replace('/login');
+    router.replace('/');
   };
 
   return (
