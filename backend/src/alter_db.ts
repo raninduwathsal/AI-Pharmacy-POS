@@ -25,6 +25,30 @@ async function run() {
         } else {
             console.error('Error altering Sale_Items:', e);
         }
+    }
+
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS Prescription_Book_Records (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                patient_name VARCHAR(255),
+                patient_age INT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS Prescription_Book_Lines (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                record_id INT NOT NULL,
+                medicine_name_raw VARCHAR(255) NOT NULL,
+                frequency VARCHAR(100),
+                total_amount INT NOT NULL,
+                FOREIGN KEY (record_id) REFERENCES Prescription_Book_Records(id) ON DELETE CASCADE
+            )
+        `);
+        console.log('Successfully created Prescription_Book tables.');
+    } catch (e: any) {
+        console.error('Error creating Prescription_Book tables:', e);
     } finally {
         process.exit(0);
     }

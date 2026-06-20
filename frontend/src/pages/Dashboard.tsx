@@ -17,6 +17,7 @@ import SuppliersTab from '@/components/dashboard/SuppliersTab';
 import GRNTab from '@/components/dashboard/GRNTab';
 import FinanceTab from '@/components/dashboard/FinanceTab';
 import PosTab from '@/components/dashboard/PosTab';
+import PrescriptionBookTab from '@/components/dashboard/PrescriptionBookTab';
 import SettingsTab from '@/components/dashboard/SettingsTab';
 import PatientsTab from '@/components/dashboard/PatientsTab';
 import AuditLogs from './admin/AuditLogs';
@@ -202,6 +203,7 @@ export default function Dashboard() {
                         {canManageRoles && <TabsTrigger value="rbac">Roles & Permissions</TabsTrigger>}
                         {canManageRoles && <TabsTrigger value="settings">App Settings</TabsTrigger>}
                         {canViewPOS && <TabsTrigger value="pos" className="bg-blue-50 text-blue-700 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Point of Sale (POS)</TabsTrigger>}
+                        {canViewPOS && <TabsTrigger value="prescription-book">Prescription Book</TabsTrigger>}
                         {canViewInventory && <TabsTrigger value="inventory">Products / Alerts</TabsTrigger>}
                         {canViewSuppliers && <TabsTrigger value="suppliers">Suppliers</TabsTrigger>}
                         {canViewGRN && <TabsTrigger value="grn">Receive Stock (GRN)</TabsTrigger>}
@@ -337,6 +339,14 @@ export default function Dashboard() {
                         <TabsContent value="pos">
                             <div className="bg-white rounded-xl border shadow-sm p-6 animate-in fade-in zoom-in-95 duration-300">
                                 <PosTab currency={settings.currency || '$'} canManageSales={userPerms.includes('EDIT_PAST_SALES')} />
+                            </div>
+                        </TabsContent>
+                    )}
+
+                    {canViewPOS && (
+                        <TabsContent value="prescription-book">
+                            <div className="bg-white rounded-xl border shadow-sm p-6 animate-in fade-in zoom-in-95 duration-300">
+                                <PrescriptionBookTab />
                             </div>
                         </TabsContent>
                     )}

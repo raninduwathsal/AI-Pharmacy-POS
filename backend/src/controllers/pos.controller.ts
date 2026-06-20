@@ -131,6 +131,24 @@ export const confirmCheckout = async (req: AuthRequest, res: Response) => {
             );
         }
 
+        // --- Prescription Book Saving ---
+        if (rxItems.length > 0) {
+            const [bookRes] = await connection.query<ResultSetHeader>(
+                `INSERT INTO Prescription_Book_Records (patient_name, patient_age) VALUES (?, ?)`,
+                [req.body.prescription_patient_name || null, req.body.prescription_patient_age || null]
+            );
+            const bookId = bookRes.insertId;
+
+            for (const item of rxItems) {
+                await connection.query(
+                    `INSERT INTO Prescription_Book_Lines (record_id, medicine_name_raw, frequency, total_amount) 
+                     VALUES (?, COALESCE((SELECT name FROM Products WHERE product_id = ? LIMIT 1), 'Unknown'), ?, ?)`,
+                    [bookId, item.product_id, item.frequency || '', item.quantity]
+                );
+            }
+        }
+        // --------------------------------
+
         // 1. Create Completed Invoice
         const [invResult] = await connection.query<ResultSetHeader>(
             `INSERT INTO Sales_Invoices (is_over_the_counter, patient_id, cashier_id, prescription_id, payment_method, total_amount, money_given, status, notes)
@@ -261,6 +279,40 @@ export const getSalesHistory = async (req: AuthRequest, res: Response) => {
     }
 };
 
+export const getPrescriptionBookHistory = async (req: AuthRequest, res: Response) => {
+    try {
+        const [records] = await pool.query<RowDataPacket[]>(
+            `SELECT id, patient_name, patient_age, created_at FROM Prescription_Book_Records ORDER BY created_at DESC LIMIT 100`
+        );
+        
+        if (records.length === 0) {
+            return res.status(200).json([]);
+        }
+
+        const recordIds = records.map(r => r.id);
+        const [lines] = await pool.query<RowDataPacket[]>(
+            `SELECT id, record_id, medicine_name_raw, frequency, total_amount FROM Prescription_Book_Lines WHERE record_id IN (?)`,
+            [recordIds]
+        );
+
+        const linesByRecord = lines.reduce((acc: any, line: any) => {
+            if (!acc[line.record_id]) acc[line.record_id] = [];
+            acc[line.record_id].push(line);
+            return acc;
+        }, {});
+
+        const result = records.map(r => ({
+            ...r,
+            lines: linesByRecord[r.id] || []
+        }));
+
+        res.status(200).json(result);
+    } catch (err) {
+        console.error("Error fetching prescription book:", err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 export const deleteInvoice = async (req: AuthRequest, res: Response) => {
     const invoiceId = parseInt(req.params.id as string);
     const connection = await pool.getConnection();
@@ -327,7 +379,7 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
             return res.status(500).json({ error: 'GEMINI_API_KEY or GEMINI_FALLBACK_API_KEY not configured on server' });
         }
 
-        const promptText = 'Extract the prescription information from this image. For frequency, strictly use one of these options if possible: OD, BID, TID, QID, Q4H, Q8H, STAT, PRN. For gels or creams, instead of "apply", use "PRN". If you cannot find a total quantity, default total_amount to 1. Return a JSON object ONLY with the following schema: { "extracted_lines": [{ "medicine_name_raw": "string", "frequency": "string", "total_amount": number }] }';
+        const promptText = 'Extract the prescription information from this image. For frequency, strictly use one of these options if possible: OD, BID, TID, QID, Q4H, Q8H, STAT, PRN. For gels or creams, instead of "apply", use "PRN". If you cannot find a total quantity, default total_amount to 1. Return a JSON object ONLY with the following schema: { "patient_name": "string", "patient_age": number, "extracted_lines": [{ "medicine_name_raw": "string", "frequency": "string", "total_amount": number }] }';
         
         let response;
         try {
@@ -432,6 +484,8 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
             io.emit('new_ai_scan_received', {
                 prescription_id: prescriptionId,
                 patient_id: null,
+                patient_name: extractedData.patient_name || '',
+                patient_age: extractedData.patient_age || '',
                 extracted_lines: extractedData.extracted_lines
             });
 

@@ -183,3 +183,19 @@ CREATE TABLE IF NOT EXISTS Payroll (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (emp_id) REFERENCES Employee(emp_id) ON DELETE RESTRICT
 );
+
+CREATE TABLE IF NOT EXISTS Prescription_Book_Records (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_name VARCHAR(255),
+    patient_age INT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Prescription_Book_Lines (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    record_id INT NOT NULL,
+    medicine_name_raw VARCHAR(255) NOT NULL,
+    frequency VARCHAR(100),
+    total_amount INT NOT NULL,
+    FOREIGN KEY (record_id) REFERENCES Prescription_Book_Records(id) ON DELETE CASCADE
+);

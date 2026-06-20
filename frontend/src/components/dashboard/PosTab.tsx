@@ -80,6 +80,8 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     // -- AI Webhook State --
     const [aiModalOpen, setAiModalOpen] = useState(false);
     const [pendingAiRxId, setPendingAiRxId] = useState<number | null>(null);
+    const [prescriptionPatientName, setPrescriptionPatientName] = useState<string>('');
+    const [prescriptionPatientAge, setPrescriptionPatientAge] = useState<string>('');
     const [aiLines, setAiLines] = useState<AiExtractedLine[]>([]);
     const socketRef = useRef<Socket | null>(null);
 
@@ -108,6 +110,8 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             console.log("Real-time AI Scan Received:", data);
             setPendingAiRxId(data.prescription_id);
             setAiLines(data.extracted_lines || []);
+            setPrescriptionPatientName(data.patient_name || '');
+            setPrescriptionPatientAge(data.patient_age ? String(data.patient_age) : '');
             setAiModalOpen(true);
             toast({
                 title: "AI Scan Received",
@@ -260,6 +264,8 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                 is_over_the_counter: !selectedPatientId,
                 patient_id: selectedPatientId,
                 prescription_id: pendingAiRxId,
+                prescription_patient_name: prescriptionPatientName,
+                prescription_patient_age: prescriptionPatientAge ? Number(prescriptionPatientAge) : null,
                 payment_method: moneyGiven > 0 ? 'Cash' : 'Pending',
                 total_amount: discountedTotal,
                 money_given: moneyGiven,
@@ -280,6 +286,9 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             setMoneyGiven(0);
             setSelectedPatientId(null);
             setDiscountPct(0);
+            setPrescriptionPatientName('');
+            setPrescriptionPatientAge('');
+            setPendingAiRxId(null);
             loadHistory();
 
             navigate(`/receipt/${res.invoice_id}`);
@@ -302,6 +311,8 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                 is_over_the_counter: !selectedPatientId,
                 patient_id: selectedPatientId,
                 prescription_id: pendingAiRxId,
+                prescription_patient_name: prescriptionPatientName,
+                prescription_patient_age: prescriptionPatientAge ? Number(prescriptionPatientAge) : null,
                 payment_method: 'Pending',
                 total_amount: discountedTotal,
                 money_given: 0,
@@ -323,6 +334,9 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             setMoneyGiven(0);
             setSelectedPatientId(null);
             setDiscountPct(0);
+            setPrescriptionPatientName('');
+            setPrescriptionPatientAge('');
+            setPendingAiRxId(null);
             loadHistory();
 
         } catch (error: any) {
@@ -485,6 +499,16 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                     <Zap className="h-4 w-4 mr-2" /> Review Pending AI Data
                                                 </Button>
                                             )}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 bg-white p-3 rounded-lg border shadow-sm">
+                                        <div className="space-y-1">
+                                            <Label>Patient Name (Prescription)</Label>
+                                            <Input placeholder="Optional..." value={prescriptionPatientName} onChange={(e) => setPrescriptionPatientName(e.target.value)} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label>Patient Age</Label>
+                                            <Input type="number" placeholder="Optional..." value={prescriptionPatientAge} onChange={(e) => setPrescriptionPatientAge(e.target.value)} />
                                         </div>
                                     </div>
                                     <div className="border rounded-md bg-white shadow-sm overflow-hidden">
