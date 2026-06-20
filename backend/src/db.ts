@@ -19,7 +19,11 @@ try {
         database: dbUrl.pathname.replace(/^\//, ''),
         ssl: isLocal ? undefined : {
             rejectUnauthorized: false
-        }
+        },
+        waitForConnections: true,
+        connectionLimit: 10,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 10000
     };
     
     pool = mysql.createPool(config);
