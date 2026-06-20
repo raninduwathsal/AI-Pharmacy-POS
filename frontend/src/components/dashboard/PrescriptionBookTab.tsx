@@ -24,12 +24,18 @@ export default function PrescriptionBookTab() {
     const [records, setRecords] = useState<PrescriptionBookRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
+    
+    // Pagination state
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
 
-    const loadRecords = async () => {
+    const loadRecords = async (pageNum: number = 1) => {
         setLoading(true);
         try {
-            const data = await fetchWithAuth('/pos/prescription-book');
-            setRecords(data || []);
+            const res = await fetchWithAuth(`/pos/prescription-book?page=${pageNum}&limit=20`);
+            setRecords(res.data || []);
+            setTotalPages(res.totalPages || 1);
+            setPage(res.page || pageNum);
         } catch (error) {
             console.error("Failed to fetch prescription book", error);
         } finally {
@@ -38,8 +44,8 @@ export default function PrescriptionBookTab() {
     };
 
     useEffect(() => {
-        loadRecords();
-    }, []);
+        loadRecords(page);
+    }, [page]);
 
     const toggleRow = (id: number) => {
         setExpandedRows(prev => ({
@@ -52,7 +58,7 @@ export default function PrescriptionBookTab() {
         <div className="space-y-4">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold text-slate-800">Prescription Book</h2>
-                <Button variant="outline" onClick={loadRecords} disabled={loading}>
+                <Button variant="outline" onClick={() => loadRecords(page)} disabled={loading}>
                     <RefreshCcw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                     Refresh
                 </Button>
@@ -145,6 +151,39 @@ export default function PrescriptionBookTab() {
                         )}
                     </TableBody>
                 </Table>
+                
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6 mt-4">
+                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm text-gray-700">
+                                Showing page <span className="font-medium">{page}</span> of <span className="font-medium">{totalPages}</span>
+                            </p>
+                        </div>
+                        <div>
+                            <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1 || loading}
+                                    className="rounded-l-md"
+                                >
+                                    Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages || loading}
+                                    className="rounded-r-md ml-2"
+                                >
+                                    Next
+                                </Button>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

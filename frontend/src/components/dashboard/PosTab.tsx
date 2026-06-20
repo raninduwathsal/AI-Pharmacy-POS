@@ -90,8 +90,9 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     const [aiSearchQueries, setAiSearchQueries] = useState<Record<number, string>>({});
     const [aiSearchResults, setAiSearchResults] = useState<Record<number, ProductSearchResult[]>>({});
 
-    // -- History State --
     const [history, setHistory] = useState<SaleHistory[]>([]);
+    const [historyPage, setHistoryPage] = useState(1);
+    const [historyTotalPages, setHistoryTotalPages] = useState(1);
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("sale");
@@ -124,17 +125,19 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             setCart([{ id: crypto.randomUUID(), product_id: null, product_name: "", quantity: 1, unit_price: 0, frequency: "", type: "otc" }]);
         }
 
-        loadHistory();
+        loadHistory(historyPage);
 
         return () => {
             socketRef.current?.disconnect();
         };
-    }, []);
+    }, [historyPage]);
 
-    const loadHistory = async () => {
+    const loadHistory = async (pageNum: number = 1) => {
         try {
-            const data = await fetchWithAuth('/pos/history');
-            setHistory(data);
+            const res = await fetchWithAuth(`/pos/history?page=${pageNum}&limit=20`);
+            setHistory(res.data || []);
+            setHistoryTotalPages(res.totalPages || 1);
+            setHistoryPage(res.page || pageNum);
         } catch (error) {
             console.error(error);
         }
@@ -729,7 +732,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                         <div className="bg-white rounded-xl shadow-sm border p-4 space-y-4">
                             <div className="flex justify-between items-center">
                                 <h2 className="text-2xl font-bold">Sales & Drafts History</h2>
-                                <Button variant="outline" onClick={loadHistory}><RefreshCcw className="h-4 w-4 mr-2" /> Refresh</Button>
+                                <Button variant="outline" onClick={() => loadHistory(historyPage)}><RefreshCcw className="h-4 w-4 mr-2" /> Refresh</Button>
                             </div>
 
                             <Table>
@@ -771,6 +774,39 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                     {history.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-6 text-slate-500">No records found.</TableCell></TableRow>}
                                 </TableBody>
                             </Table>
+                            
+                            {/* Pagination Controls */}
+                            <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6 mt-4">
+                                <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                                    <div>
+                                        <p className="text-sm text-gray-700">
+                                            Showing page <span className="font-medium">{historyPage}</span> of <span className="font-medium">{historyTotalPages}</span>
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                                disabled={historyPage === 1}
+                                                className="rounded-l-md"
+                                            >
+                                                Previous
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setHistoryPage(p => Math.min(historyTotalPages, p + 1))}
+                                                disabled={historyPage === historyTotalPages}
+                                                className="rounded-r-md ml-2"
+                                            >
+                                                Next
+                                            </Button>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </TabsContent>
                 </Tabs>

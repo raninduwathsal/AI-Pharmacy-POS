@@ -266,13 +266,26 @@ export const getInvoiceReceipt = async (req: AuthRequest, res: Response) => {
 
 export const getSalesHistory = async (req: AuthRequest, res: Response) => {
     try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const offset = (page - 1) * limit;
+
+        const [countResult] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM Sales_Invoices`);
+        const total = countResult[0].total;
+
         const [sales] = await pool.query<RowDataPacket[]>(
             `SELECT i.invoice_id, i.total_amount, i.created_at, i.payment_method, i.status, e.name as cashier_name
              FROM Sales_Invoices i
              JOIN Employee e ON i.cashier_id = e.emp_id
-             ORDER BY i.created_at DESC LIMIT 100`
+             ORDER BY i.created_at DESC LIMIT ? OFFSET ?`,
+             [limit, offset]
         );
-        res.status(200).json(sales);
+        res.status(200).json({
+            data: sales,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        });
     } catch (err) {
         console.error("Error fetching sales history:", err);
         res.status(500).json({ error: 'Internal server error' });
@@ -281,12 +294,20 @@ export const getSalesHistory = async (req: AuthRequest, res: Response) => {
 
 export const getPrescriptionBookHistory = async (req: AuthRequest, res: Response) => {
     try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const offset = (page - 1) * limit;
+
+        const [countResult] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM Prescription_Book_Records`);
+        const total = countResult[0].total;
+
         const [records] = await pool.query<RowDataPacket[]>(
-            `SELECT id, patient_name, patient_age, created_at FROM Prescription_Book_Records ORDER BY created_at DESC LIMIT 100`
+            `SELECT id, patient_name, patient_age, created_at FROM Prescription_Book_Records ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [limit, offset]
         );
         
         if (records.length === 0) {
-            return res.status(200).json([]);
+            return res.status(200).json({ data: [], total, page, totalPages: Math.ceil(total / limit) });
         }
 
         const recordIds = records.map(r => r.id);
@@ -306,7 +327,12 @@ export const getPrescriptionBookHistory = async (req: AuthRequest, res: Response
             lines: linesByRecord[r.id] || []
         }));
 
-        res.status(200).json(result);
+        res.status(200).json({
+            data: result,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        });
     } catch (err) {
         console.error("Error fetching prescription book:", err);
         res.status(500).json({ error: 'Internal server error' });

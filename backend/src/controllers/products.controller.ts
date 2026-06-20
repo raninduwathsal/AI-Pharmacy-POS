@@ -6,8 +6,28 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 export const getAllProducts = async (req: Request, res: Response) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM Products');
-        res.status(200).json(rows);
+        const page = parseInt(req.query.page as string) || 1;
+        const limitStr = req.query.limit as string;
+        
+        const [countResult] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM Products`);
+        const total = countResult[0].total;
+
+        if (limitStr === 'all' || parseInt(limitStr) > 5000) {
+            const [rows] = await pool.query('SELECT * FROM Products');
+            return res.status(200).json({ data: rows, total, page: 1, totalPages: 1 });
+        }
+
+        const limit = parseInt(limitStr) || 50;
+        const offset = (page - 1) * limit;
+
+        const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM Products LIMIT ? OFFSET ?', [limit, offset]);
+        
+        res.status(200).json({
+            data: rows,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Internal server error' });

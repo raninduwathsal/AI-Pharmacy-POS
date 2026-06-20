@@ -32,6 +32,10 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
     const [alerts, setAlerts] = useState<AlertData>({ lowStock: [], nearExpiry: [] });
     const [isLoading, setIsLoading] = useState(true);
     const [isImporting, setIsImporting] = useState(false);
+    
+    // Pagination state
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
 
     // Product Form State
     const [isProductOpen, setIsProductOpen] = useState(false);
@@ -40,14 +44,16 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const loadData = async () => {
+    const loadData = async (pageNum: number = 1) => {
         try {
             setIsLoading(true);
-            const [prodData, alertData] = await Promise.all([
-                fetchWithAuth('/products'),
+            const [prodDataRes, alertData] = await Promise.all([
+                fetchWithAuth(`/products?page=${pageNum}&limit=50`),
                 fetchWithAuth('/inventory/alerts')
             ]);
-            setProducts(prodData);
+            setProducts(prodDataRes.data || []);
+            setTotalPages(prodDataRes.totalPages || 1);
+            setPage(prodDataRes.page || pageNum);
             setAlerts(alertData);
         } catch (error: any) {
             toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -56,32 +62,42 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
         }
     };
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => { loadData(page); }, [page]);
 
     // --- Import / Export Handlers ---
-    const handleExport = () => {
-        const exportData = products.map(p => {
-            let dates = [];
-            try { dates = Array.isArray(p.expiry_dates) ? p.expiry_dates : (typeof p.expiry_dates === 'string' ? JSON.parse(p.expiry_dates) : []); } catch(e) {}
-            return {
-                name: p.name,
-                measure_unit: p.measure_unit,
-                category: p.category || '',
-                reorder_threshold: p.reorder_threshold,
-                current_stock: p.current_stock,
-                selling_price: p.selling_price,
-                unit_cost: p.unit_cost || 0,
-                location: p.location || '',
-                expiry_dates: dates.join(', ') // Commas inside quotes, handled automatically by PapaParse
-            };
-        });
-        const csvStr = Papa.unparse(exportData);
-        const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvStr);
-        const exportFileDefaultName = `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`;
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
+    const handleExport = async () => {
+        setIsImporting(true); // Reuse loading state for export button disable
+        try {
+            const allProductsRes = await fetchWithAuth('/products?limit=100000');
+            const allProducts = allProductsRes.data || [];
+            
+            const exportData = allProducts.map((p: any) => {
+                let dates = [];
+                try { dates = Array.isArray(p.expiry_dates) ? p.expiry_dates : (typeof p.expiry_dates === 'string' ? JSON.parse(p.expiry_dates) : []); } catch(e) {}
+                return {
+                    name: p.name,
+                    measure_unit: p.measure_unit,
+                    category: p.category || '',
+                    reorder_threshold: p.reorder_threshold,
+                    current_stock: p.current_stock,
+                    selling_price: p.selling_price,
+                    unit_cost: p.unit_cost || 0,
+                    location: p.location || '',
+                    expiry_dates: dates.join(', ') // Commas inside quotes, handled automatically by PapaParse
+                };
+            });
+            const csvStr = Papa.unparse(exportData);
+            const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvStr);
+            const exportFileDefaultName = `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`;
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        } catch (error) {
+            toast({ title: 'Export Failed', description: 'Could not fetch data for export', variant: 'destructive' });
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const handleImportClick = () => {
@@ -253,7 +269,7 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
                     <h2 className="text-2xl font-bold">Products Catalog</h2>
                     <div className="flex items-center space-x-2">
                         <input type="file" accept=".csv" style={{ display: 'none' }} ref={fileInputRef} onChange={handleFileChange} />
-                        <Button variant="outline" onClick={handleExport} disabled={isImporting}>Export</Button>
+                        <Button variant="outline" onClick={handleExport} disabled={isImporting}>{isImporting ? 'Exporting...' : 'Export'}</Button>
                         <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
                             {isImporting ? 'Importing...' : 'Import'}
                         </Button>
@@ -350,6 +366,39 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
                         {products.length === 0 && <TableRow><TableCell colSpan={9} className="text-center">No products found.</TableCell></TableRow>}
                     </TableBody>
                 </Table>
+                
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6 mt-4">
+                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm text-gray-700">
+                                Showing page <span className="font-medium">{page}</span> of <span className="font-medium">{totalPages}</span>
+                            </p>
+                        </div>
+                        <div>
+                            <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="rounded-l-md"
+                                >
+                                    Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className="rounded-r-md ml-2"
+                                >
+                                    Next
+                                </Button>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
