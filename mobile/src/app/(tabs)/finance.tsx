@@ -4,6 +4,7 @@ import { Calendar } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { fetchWithAuth } from '../../lib/api';
 
 export default function FinanceScreen() {
   const [markedDates, setMarkedDates] = useState<any>({});
@@ -17,11 +18,8 @@ export default function FinanceScreen() {
         const token = await AsyncStorage.getItem('token');
         if (baseUrl && token) {
           try {
-            const res = await fetch(`${baseUrl}/finance/pending-checks`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (res.ok) {
+            const data = await fetchWithAuth('/finance/pending-checks');
+            if (data) {
               const dates: any = {};
               data.forEach((check: any) => {
                 const dateStr = new Date(check.check_date).toISOString().split('T')[0];

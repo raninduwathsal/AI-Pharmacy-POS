@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [showPinSetup, setShowPinSetup] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
@@ -29,7 +32,7 @@ export default function LoginScreen() {
       if (res.ok) {
         await AsyncStorage.setItem('token', data.token);
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
-        router.replace('/(tabs)/dashboard');
+        setShowPinSetup(true);
       } else {
         Alert.alert('Login Failed', data.error || 'Invalid credentials');
       }
@@ -39,6 +42,45 @@ export default function LoginScreen() {
       setIsLoading(false);
     }
   };
+
+  const handleSavePin = async () => {
+    if (pin.length !== 4) {
+      Alert.alert('Error', 'PIN must be 4 digits');
+      return;
+    }
+    await SecureStore.setItemAsync('saved_email', email);
+    await SecureStore.setItemAsync('saved_password', password);
+    await SecureStore.setItemAsync('saved_pin', pin);
+    router.replace('/(tabs)/dashboard');
+  };
+
+  const handleSkipPin = () => {
+    router.replace('/(tabs)/dashboard');
+  };
+
+  if (showPinSetup) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Setup Quick Login PIN</Text>
+        <Text style={{ textAlign: 'center', marginBottom: 20 }}>Create a 4-digit PIN for faster logins</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter 4-digit PIN"
+          value={pin}
+          onChangeText={setPin}
+          keyboardType="numeric"
+          maxLength={4}
+          secureTextEntry
+        />
+        <TouchableOpacity style={styles.loginBtn} onPress={handleSavePin}>
+          <Text style={styles.loginBtnText}>Save PIN</Text>
+        </TouchableOpacity>
+        <View style={{ marginTop: 20 }}>
+          <Button title="Skip for now" onPress={handleSkipPin} color="#888" />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

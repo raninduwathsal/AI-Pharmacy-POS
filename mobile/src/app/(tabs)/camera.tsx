@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchWithAuth } from '../../lib/api';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -38,20 +39,14 @@ export default function CameraScreen() {
           type: 'image/jpeg'
         } as any);
 
-        const res = await fetch(`${baseUrl}/pos/upload-mobile-prescription`, {
+        await fetchWithAuth('/pos/upload-mobile-prescription', {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         });
 
-        if (res.ok) {
-          Alert.alert('Success', 'Photo uploaded and sent to web app!');
-        } else {
-          const errText = await res.text();
-          Alert.alert('Error', `Failed to upload photo: ${res.status} ${errText}`);
-        }
+        Alert.alert('Success', 'Photo uploaded and sent to web app!');
       } catch (error: any) {
-        Alert.alert('Error', error.message);
+        Alert.alert('Error', error.message || 'Failed to upload photo');
       } finally {
         setIsUploading(false);
       }

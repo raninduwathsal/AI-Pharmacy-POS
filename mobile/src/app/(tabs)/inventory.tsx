@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
+import { fetchWithAuth } from '../../lib/api';
 
 export default function InventoryScreen() {
   const [products, setProducts] = useState<any[]>([]);
@@ -35,11 +36,8 @@ export default function InventoryScreen() {
       const token = await AsyncStorage.getItem('token');
       if (baseUrl && token) {
         try {
-          const res = await fetch(`${baseUrl}/products/search?q=${encodeURIComponent(debouncedQuery)}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const data = await res.json();
-          if (res.ok) setProducts(data);
+          const data = await fetchWithAuth(`/products/search?q=${encodeURIComponent(debouncedQuery)}`);
+          if (data) setProducts(data);
         } catch (e) { console.error(e); }
       }
       setIsLoading(false);

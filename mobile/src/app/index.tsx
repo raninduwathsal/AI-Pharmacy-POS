@@ -15,7 +15,13 @@ export default function ConfigScreen() {
         if (token) {
           router.replace('/(tabs)/dashboard');
         } else {
-          router.replace('/login');
+          const { getItemAsync } = await import('expo-secure-store');
+          const savedPin = await getItemAsync('saved_pin');
+          if (savedPin) {
+            router.replace('/pin-login');
+          } else {
+            router.replace('/login');
+          }
         }
       }
     };

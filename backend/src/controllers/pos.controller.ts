@@ -321,23 +321,49 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
         }
 
         const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
+        const fallbackApiKey = process.env.GEMINI_FALLBACK_API_KEY;
+
+        if (!apiKey && !fallbackApiKey) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY or GEMINI_FALLBACK_API_KEY not configured on server' });
         }
 
-        const ai = new GoogleGenAI({ apiKey });
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { inlineData: { data: file.buffer.toString("base64"), mimeType: file.mimetype } },
-                        { text: 'Extract the prescription information from this image. For frequency, strictly use one of these options if possible: OD, BID, TID, QID, Q4H, Q8H, STAT, PRN. For gels or creams, instead of "apply", use "PRN". If you cannot find a total quantity, default total_amount to 1. Return a JSON object ONLY with the following schema: { "extracted_lines": [{ "medicine_name_raw": "string", "frequency": "string", "total_amount": number }] }' }
+        const promptText = 'Extract the prescription information from this image. For frequency, strictly use one of these options if possible: OD, BID, TID, QID, Q4H, Q8H, STAT, PRN. For gels or creams, instead of "apply", use "PRN". If you cannot find a total quantity, default total_amount to 1. Return a JSON object ONLY with the following schema: { "extracted_lines": [{ "medicine_name_raw": "string", "frequency": "string", "total_amount": number }] }';
+        
+        let response;
+        try {
+            const ai = new GoogleGenAI({ apiKey: apiKey || fallbackApiKey || '' });
+            response = await ai.models.generateContent({
+                model: 'gemini-3.5-flash',
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            { inlineData: { data: file.buffer.toString("base64"), mimeType: file.mimetype } },
+                            { text: promptText }
+                        ]
+                    }
+                ]
+            });
+        } catch (error) {
+            console.warn("Primary Gemini API key failed, attempting fallback...");
+            if (fallbackApiKey && apiKey) {
+                const fallbackAi = new GoogleGenAI({ apiKey: fallbackApiKey });
+                response = await fallbackAi.models.generateContent({
+                    model: 'gemini-3.5-flash',
+                    contents: [
+                        {
+                            role: 'user',
+                            parts: [
+                                { inlineData: { data: file.buffer.toString("base64"), mimeType: file.mimetype } },
+                                { text: promptText }
+                            ]
+                        }
                     ]
-                }
-            ]
-        });
+                });
+            } else {
+                throw error;
+            }
+        }
 
         let jsonStr = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
         const extractedData = JSON.parse(jsonStr);

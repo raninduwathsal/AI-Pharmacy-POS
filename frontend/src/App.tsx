@@ -13,8 +13,8 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/receipt/:id" element={<Receipt />} />
-        {/* Default route redirects to dashboard, which redirects to login if unauth */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* Default route explicitly redirects to login if unauth to prevent 404s, otherwise dashboard */}
+        <Route path="*" element={localStorage.getItem('token') ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
       </Routes>
       <Toaster />
     </BrowserRouter>

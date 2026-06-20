@@ -1,10 +1,10 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io, Socket } from 'socket.io-client';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Alert } from 'react-native';
+import { fetchWithAuth } from '../../lib/api';
 
 type AlertItem = {
   id: string;
@@ -20,25 +20,20 @@ export default function DashboardScreen() {
   
   const fetchInitialAlerts = useCallback(async () => {
     try {
-      const baseUrl = await AsyncStorage.getItem('backend_url');
-      const token = await AsyncStorage.getItem('token');
-      if (!baseUrl || !token) return;
-
-      const headers = { 'Authorization': `Bearer ${token}` };
       let fetchedAlerts: AlertItem[] = [];
 
       // Fetch Read Alerts History
       let readAlertsList: any[] = [];
-      const readRes = await fetch(`${baseUrl}/alerts/read`, { headers });
-      if (readRes.ok) {
-        readAlertsList = await readRes.json();
+      try {
+        readAlertsList = await fetchWithAuth('/alerts/read');
+      } catch (e) {
+        // Ignore read alerts error
       }
       const readIds = new Set(readAlertsList.map(r => r.alert_id));
 
       // Fetch Inventory Alerts
-      const invRes = await fetch(`${baseUrl}/inventory/alerts`, { headers });
-      if (invRes.ok) {
-        const invData = await invRes.json();
+      try {
+        const invData = await fetchWithAuth('/inventory/alerts');
         
         if (invData.lowStock && invData.lowStock.length > 0) {
           invData.lowStock.forEach((item: any) => {
@@ -67,15 +62,13 @@ export default function DashboardScreen() {
             }
           });
         }
-      } else {
-        const errText = await invRes.text();
-        Alert.alert('Inventory Fetch Error', `Status: ${invRes.status}\n${errText}`);
+      } catch (err: any) {
+        Alert.alert('Inventory Fetch Error', err.message);
       }
 
       // Fetch Finance Alerts
-      const finRes = await fetch(`${baseUrl}/finance/pending-checks`, { headers });
-      if (finRes.ok) {
-        const checksData = await finRes.json();
+      try {
+        const checksData = await fetchWithAuth('/finance/pending-checks');
         const now = new Date();
         const in7Days = new Date();
         in7Days.setDate(now.getDate() + 7);
@@ -96,9 +89,8 @@ export default function DashboardScreen() {
             });
           }
         }
-      } else {
-        const errText = await finRes.text();
-        Alert.alert('Finance Fetch Error', `Status: ${finRes.status}\n${errText}`);
+      } catch (err: any) {
+        Alert.alert('Finance Fetch Error', err.message);
       }
 
       // Map History
@@ -169,18 +161,10 @@ export default function DashboardScreen() {
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, isRead: true } : a));
 
     try {
-      const baseUrl = await AsyncStorage.getItem('backend_url');
-      const token = await AsyncStorage.getItem('token');
-      if (baseUrl && token) {
-        await fetch(`${baseUrl}/alerts/read`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ alert_id: id, message })
-        });
-      }
+      await fetchWithAuth('/alerts/read', {
+        method: 'POST',
+        body: JSON.stringify({ alert_id: id, message })
+      });
     } catch (e) {
        console.error("Failed to mark as read", e);
     }
