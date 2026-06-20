@@ -365,7 +365,7 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
             }
         }
 
-        let jsonStr = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
+        let jsonStr = response!.text!.replace(/```json/gi, '').replace(/```/g, '').trim();
         const extractedData = JSON.parse(jsonStr);
 
         const connection = await pool.getConnection();

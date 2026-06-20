@@ -1,4 +1,4 @@
-import pool from './db.ts';
+import pool from './db';
 
 async function run() {
     try {
@@ -16,7 +16,7 @@ async function run() {
     try {
         await pool.query('ALTER TABLE Sale_Items ADD COLUMN product_id INT;');
         await pool.query('ALTER TABLE Sale_Items ADD CONSTRAINT fk_product FOREIGN KEY (product_id) REFERENCES Products(product_id) ON DELETE RESTRICT;');
-        await pool.query('ALTER TABLE Sale_Items ADD COLUMN item_type VARCHAR(50) DEFAULT \\'otc\\';');
+        await pool.query("ALTER TABLE Sale_Items ADD COLUMN item_type VARCHAR(50) DEFAULT 'otc';");
         await pool.query('ALTER TABLE Sale_Items ADD COLUMN frequency VARCHAR(50);');
         console.log('Successfully added product_id, item_type, and frequency to Sale_Items table.');
     } catch (e: any) {
