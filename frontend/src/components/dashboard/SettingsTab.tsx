@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function SettingsTab() {
     const { toast } = useToast();
@@ -14,7 +15,8 @@ export default function SettingsTab() {
         pharmacy_name: "",
         pharmacy_phone: "",
         pharmacy_email: "",
-        pharmacy_description: ""
+        pharmacy_description: "",
+        allow_out_of_stock_sales: "false"
     });
 
     useEffect(() => {
@@ -29,7 +31,8 @@ export default function SettingsTab() {
                 pharmacy_name: data.pharmacy_name || "",
                 pharmacy_phone: data.pharmacy_phone || "",
                 pharmacy_email: data.pharmacy_email || "",
-                pharmacy_description: data.pharmacy_description || ""
+                pharmacy_description: data.pharmacy_description || "",
+                allow_out_of_stock_sales: data.allow_out_of_stock_sales || "false"
             });
         } catch (error: any) {
             toast({ title: "Error", description: "Failed to load settings.", variant: "destructive" });
@@ -107,6 +110,19 @@ export default function SettingsTab() {
                         placeholder="E.g. 123 Health Ave, NY. 'Your health is our priority!'"
                         rows={3}
                     />
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Checkbox
+                        id="allow_out_of_stock_sales"
+                        checked={settings.allow_out_of_stock_sales === "true"}
+                        onCheckedChange={(checked) => setSettings({ ...settings, allow_out_of_stock_sales: checked ? "true" : "false" })}
+                    />
+                    <div className="space-y-1 leading-none">
+                        <Label htmlFor="allow_out_of_stock_sales">Allow Out of Stock Sales</Label>
+                        <p className="text-sm text-muted-foreground">
+                            If enabled, cashiers can complete sales even when product stock is zero or insufficient.
+                        </p>
+                    </div>
                 </div>
             </div>
 

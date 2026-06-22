@@ -157,6 +157,10 @@ export const confirmCheckout = async (req: AuthRequest, res: Response) => {
         );
         const invoiceId = invResult.insertId;
 
+        // 1.5 Fetch Allow Out of Stock Sales Setting
+        const [settingsRows] = await connection.query<RowDataPacket[]>('SELECT setting_value FROM App_Settings WHERE setting_key = ?', ['allow_out_of_stock_sales']);
+        const allowOutOfStockSales = settingsRows.length > 0 && settingsRows[0].setting_value === 'true';
+
         // 2. Deduct from global Product stock tracking and Record Sale Item
         for (const item of items) {
             const productId = item.product_id;
@@ -169,7 +173,9 @@ export const confirmCheckout = async (req: AuthRequest, res: Response) => {
             );
 
             if (!products.length || products[0].current_stock < reqQty) {
-                throw new Error(`Insufficient stock for Product ID ${productId}`);
+                if (!allowOutOfStockSales) {
+                    throw new Error(`Insufficient stock for Product ID ${productId}`);
+                }
             }
 
             // Deduct from global Product stock tracking
