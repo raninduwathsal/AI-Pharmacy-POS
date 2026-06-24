@@ -32,10 +32,13 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
     const [alerts, setAlerts] = useState<AlertData>({ lowStock: [], nearExpiry: [] });
     const [isLoading, setIsLoading] = useState(true);
     const [isImporting, setIsImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState(0);
+    const [totalImportRows, setTotalImportRows] = useState(0);
     
     // Pagination state
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [searchTerm, setSearchTerm] = useState('');
 
     // Product Form State
     const [isProductOpen, setIsProductOpen] = useState(false);
@@ -44,11 +47,12 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const loadData = async (pageNum: number = 1) => {
+    const loadData = async (pageNum: number = 1, search: string = searchTerm) => {
         try {
             setIsLoading(true);
+            const queryParam = search ? `&search=${encodeURIComponent(search)}` : '';
             const [prodDataRes, alertData] = await Promise.all([
-                fetchWithAuth(`/products?page=${pageNum}&limit=50`),
+                fetchWithAuth(`/products?page=${pageNum}&limit=50${queryParam}`),
                 fetchWithAuth('/inventory/alerts')
             ]);
             setProducts(prodDataRes.data || []);
@@ -62,7 +66,15 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
         }
     };
 
-    useEffect(() => { loadData(page); }, [page]);
+    useEffect(() => { loadData(page, searchTerm); }, [page]);
+    
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (page !== 1) setPage(1);
+            else loadData(1, searchTerm);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     // --- Import / Export Handlers ---
     const handleExport = async () => {
@@ -125,8 +137,11 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
                 let errorCount = 0;
                 let updateCount = 0;
                 const rows = results.data as any[];
+                setTotalImportRows(rows.length);
+                setImportProgress(0);
 
-                for (const item of rows) {
+                for (let i = 0; i < rows.length; i++) {
+                    const item = rows[i];
                     try {
                         if (!item.name || !item.measure_unit) {
                             errorCount++;
@@ -175,10 +190,13 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
                         console.error('Import error for item', item.name, err);
                         errorCount++;
                     }
+                    setImportProgress(i + 1);
                 }
                 toast({ title: 'Import Complete', description: `Added: ${successCount}. Updated: ${updateCount}. Errors: ${errorCount}` });
                 loadData();
                 setIsImporting(false);
+                setImportProgress(0);
+                setTotalImportRows(0);
                 if (fileInputRef.current) fileInputRef.current.value = '';
             }
         });
@@ -268,10 +286,16 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
                 <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold">Products Catalog</h2>
                     <div className="flex items-center space-x-2">
+                        <Input
+                            placeholder="Search products..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-64"
+                        />
                         <input type="file" accept=".csv" style={{ display: 'none' }} ref={fileInputRef} onChange={handleFileChange} />
                         <Button variant="outline" onClick={handleExport} disabled={isImporting}>{isImporting ? 'Exporting...' : 'Export'}</Button>
                         <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
-                            {isImporting ? 'Importing...' : 'Import'}
+                            {isImporting && totalImportRows > 0 ? `Importing ${importProgress} / ${totalImportRows}...` : (isImporting ? 'Importing...' : 'Import')}
                         </Button>
                         <Dialog open={isProductOpen} onOpenChange={setIsProductOpen}>
                             <DialogTrigger asChild>

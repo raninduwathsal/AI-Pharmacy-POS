@@ -8,19 +8,29 @@ export const getAllProducts = async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
         const limitStr = req.query.limit as string;
+        const search = req.query.search as string;
         
-        const [countResult] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total FROM Products`);
+        let queryStr = 'FROM Products';
+        let queryParams: any[] = [];
+
+        if (search) {
+            queryStr += ' WHERE name LIKE ?';
+            queryParams.push(`%${search}%`);
+        }
+        
+        const [countResult] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) as total ${queryStr}`, queryParams);
         const total = countResult[0].total;
 
         if (limitStr === 'all' || parseInt(limitStr) > 5000) {
-            const [rows] = await pool.query('SELECT * FROM Products');
+            const [rows] = await pool.query(`SELECT * ${queryStr}`, queryParams);
             return res.status(200).json({ data: rows, total, page: 1, totalPages: 1 });
         }
 
         const limit = parseInt(limitStr) || 50;
         const offset = (page - 1) * limit;
 
-        const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM Products LIMIT ? OFFSET ?', [limit, offset]);
+        queryParams.push(limit, offset);
+        const [rows] = await pool.query<RowDataPacket[]>(`SELECT * ${queryStr} LIMIT ? OFFSET ?`, queryParams);
         
         res.status(200).json({
             data: rows,
