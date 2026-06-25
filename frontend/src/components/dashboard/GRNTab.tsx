@@ -168,7 +168,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
         }
     };
 
-    const handleJsonImport = () => {
+    const handleJsonImport = async () => {
         try {
             let parsed;
             try {
@@ -182,9 +182,13 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
             if (!Array.isArray(parsed)) throw new Error("JSON must be an array of objects.");
             
             const newRows: GRNRow[] = [];
+            setIsJsonModalOpen(false); // Close immediately to show loading state implicitly if we want, or just wait
+            
+            toast({ title: "Importing...", description: "Matching products from database. Please wait." });
+            
             for (const item of parsed) {
                 const newId = Date.now().toString() + Math.random().toString(36).substring(2);
-                newRows.push({
+                const row: GRNRow = {
                     id: newId,
                     product_id: null,
                     product_name: item.product_name || "",
@@ -192,22 +196,38 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                     purchased_quantity: Number(item.purchased_quantity) || 0,
                     bonus_quantity: Number(item.bonus_quantity) || 0,
                     unit_cost: Number(item.unit_cost) || 0,
-                });
+                };
+
+                if (row.product_name) {
+                    setSearchQueries(prev => ({ ...prev, [newId]: row.product_name }));
+                    try {
+                        const results = await fetchWithAuth(`/products/search?q=${encodeURIComponent(row.product_name)}`);
+                        setSearchResults(prev => ({ ...prev, [newId]: results }));
+                        
+                        if (results && results.length > 0) {
+                            const queryLower = row.product_name.toLowerCase();
+                            // Fuzzy match logic: exact -> substring -> first result
+                            const bestMatch = results.find((r: any) => r.name.toLowerCase() === queryLower) 
+                                           || results.find((r: any) => r.name.toLowerCase().includes(queryLower) || queryLower.includes(r.name.toLowerCase())) 
+                                           || results[0];
+                            
+                            row.product_id = bestMatch.product_id;
+                            row.product_name = `${bestMatch.name} (${bestMatch.measure_unit})`;
+                            
+                            // If JSON didn't provide a cost, auto-populate from DB
+                            if (!row.unit_cost && bestMatch.unit_cost) {
+                                const multiplier = parseMultiplier(bestMatch.measure_unit);
+                                row.unit_cost = Number((bestMatch.unit_cost * multiplier).toFixed(2));
+                            }
+                        }
+                    } catch (e) {}
+                }
+                newRows.push(row);
             }
             
             setItems(prev => [...prev, ...newRows]);
-            
-            // Trigger search for each imported row to pre-fetch dropdowns
-            newRows.forEach(row => {
-                if (row.product_name) {
-                    setSearchQueries(prev => ({ ...prev, [row.id]: row.product_name }));
-                    handleProductSearch(row.id, row.product_name);
-                }
-            });
-            
-            setIsJsonModalOpen(false);
             setJsonInput("");
-            toast({ title: "JSON Imported", description: `Successfully imported ${newRows.length} rows. Please map the products from the dropdowns.` });
+            toast({ title: "JSON Imported", description: `Successfully imported and auto-matched ${newRows.length} rows.` });
         } catch (err: any) {
             toast({ title: "Import Failed", description: err.message, variant: "destructive" });
         }
