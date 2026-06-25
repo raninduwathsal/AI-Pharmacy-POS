@@ -117,9 +117,13 @@ export default function Dashboard() {
                 body: formData
             });
 
-            if (!res.ok) throw new Error('Upload failed');
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || `Upload failed with status ${res.status}`);
+            }
         } catch (e: any) {
-            toast({ title: 'Error', description: 'Failed to process mobile photo', variant: 'destructive' });
+            console.error("Mobile photo process error:", e);
+            toast({ title: 'Error', description: e.message || 'Failed to process mobile photo', variant: 'destructive' });
         }
     };
 

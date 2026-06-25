@@ -415,9 +415,10 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
         
         let response;
         try {
+            console.log("Starting Gemini API call with model gemini-2.5-flash");
             const ai = new GoogleGenAI({ apiKey: apiKey || fallbackApiKey || '' });
             response = await ai.models.generateContent({
-                model: 'gemini-3.5-flash',
+                model: 'gemini-2.5-flash',
                 contents: [
                     {
                         role: 'user',
@@ -428,12 +429,15 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
                     }
                 ]
             });
-        } catch (error) {
-            console.warn("Primary Gemini API key failed, attempting fallback...");
+            console.log("Gemini API call successful");
+        } catch (error: any) {
+            console.error("Primary Gemini API call failed:", error?.message || error);
             if (fallbackApiKey && apiKey) {
-                const fallbackAi = new GoogleGenAI({ apiKey: fallbackApiKey });
-                response = await fallbackAi.models.generateContent({
-                    model: 'gemini-3.5-flash',
+                console.log("Attempting fallback API key...");
+                try {
+                    const fallbackAi = new GoogleGenAI({ apiKey: fallbackApiKey });
+                    response = await fallbackAi.models.generateContent({
+                        model: 'gemini-2.5-flash',
                     contents: [
                         {
                             role: 'user',
@@ -444,13 +448,29 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
                         }
                     ]
                 });
+                console.log("Fallback Gemini API call successful");
+                } catch (fallbackError: any) {
+                    console.error("Fallback Gemini API call failed:", fallbackError?.message || fallbackError);
+                    throw fallbackError;
+                }
             } else {
                 throw error;
             }
         }
 
-        let jsonStr = response!.text!.replace(/```json/gi, '').replace(/```/g, '').trim();
-        const extractedData = JSON.parse(jsonStr);
+        if (!response || !response.text) {
+            throw new Error('Gemini API returned an empty response');
+        }
+
+        console.log("Parsing Gemini JSON response...");
+        let jsonStr = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
+        let extractedData;
+        try {
+            extractedData = JSON.parse(jsonStr);
+        } catch (parseError) {
+            console.error("Failed to parse Gemini response as JSON:", jsonStr);
+            throw new Error("Invalid JSON response from AI");
+        }
 
         const connection = await pool.getConnection();
         try {
@@ -530,7 +550,10 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
         }
 
     } catch (error: any) {
-        console.error("Upload Prescription Error:", error);
+        console.error("========== Upload Prescription Error ==========");
+        console.error(error);
+        console.error("Stack:", error?.stack);
+        console.error("===============================================");
         res.status(500).json({ error: error.message || 'Failed to process image' });
     }
 };

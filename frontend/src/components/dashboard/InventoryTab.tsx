@@ -133,6 +133,18 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
                 }
                 
                 setIsImporting(true);
+
+                // Fetch all products to avoid duplicates during import
+                let allProducts = [...products];
+                try {
+                    const allProductsRes = await fetchWithAuth('/products?limit=100000');
+                    if (allProductsRes.data) {
+                        allProducts = allProductsRes.data;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch all products for deduplication", e);
+                }
+
                 let successCount = 0;
                 let errorCount = 0;
                 let updateCount = 0;
@@ -140,57 +152,61 @@ export default function InventoryTab({ currency = '$' }: { currency?: string }) 
                 setTotalImportRows(rows.length);
                 setImportProgress(0);
 
-                for (let i = 0; i < rows.length; i++) {
-                    const item = rows[i];
-                    try {
-                        if (!item.name || !item.measure_unit) {
+                const batchSize = 25;
+                for (let i = 0; i < rows.length; i += batchSize) {
+                    const batch = rows.slice(i, i + batchSize);
+                    
+                    await Promise.all(batch.map(async (item) => {
+                        try {
+                            if (!item.name || !item.measure_unit) {
+                                errorCount++;
+                                return;
+                            }
+
+                            let parsedDates: string[] = [];
+                            if (item.expiry_dates) {
+                                parsedDates = item.expiry_dates.split(',').map((d: string) => d.trim()).filter((d: string) => d.length > 0);
+                            }
+
+                            const existing = allProducts.find(p => p.name.toLowerCase() === item.name.toLowerCase() && p.measure_unit.toLowerCase() === item.measure_unit.toLowerCase());
+
+                            if (existing) {
+                                let existingDates: string[] = [];
+                                try { existingDates = Array.isArray(existing.expiry_dates) ? existing.expiry_dates : (typeof existing.expiry_dates === 'string' ? JSON.parse(existing.expiry_dates) : []); } catch(err) {}
+                                
+                                const payload = {
+                                    ...existing,
+                                    category: item.category || existing.category,
+                                    reorder_threshold: Number(item.reorder_threshold) || existing.reorder_threshold,
+                                    current_stock: existing.current_stock + (Number(item.current_stock) || 0), // Add stock
+                                    selling_price: Number(item.selling_price) || existing.selling_price,
+                                    unit_cost: Number(item.unit_cost) || existing.unit_cost,
+                                    expiry_dates: Array.from(new Set([...existingDates, ...parsedDates])),
+                                    location: item.location || existing.location
+                                };
+                                await fetchWithAuth(`/products/${existing.product_id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                                updateCount++;
+                            } else {
+                                const payload = {
+                                    name: item.name,
+                                    measure_unit: item.measure_unit,
+                                    category: item.category,
+                                    reorder_threshold: Number(item.reorder_threshold || 0),
+                                    current_stock: Number(item.current_stock || 0),
+                                    selling_price: Number(item.selling_price || 0),
+                                    unit_cost: Number(item.unit_cost || 0),
+                                    expiry_dates: parsedDates,
+                                    location: item.location || ''
+                                };
+                                await fetchWithAuth('/products', { method: 'POST', body: JSON.stringify(payload) });
+                                successCount++;
+                            }
+                        } catch (err) {
+                            console.error('Import error for item', item.name, err);
                             errorCount++;
-                            continue;
                         }
-
-                        let parsedDates: string[] = [];
-                        if (item.expiry_dates) {
-                            parsedDates = item.expiry_dates.split(',').map((d: string) => d.trim()).filter((d: string) => d.length > 0);
-                        }
-
-                        const existing = products.find(p => p.name.toLowerCase() === item.name.toLowerCase() && p.measure_unit.toLowerCase() === item.measure_unit.toLowerCase());
-
-                        if (existing) {
-                            let existingDates: string[] = [];
-                            try { existingDates = Array.isArray(existing.expiry_dates) ? existing.expiry_dates : (typeof existing.expiry_dates === 'string' ? JSON.parse(existing.expiry_dates) : []); } catch(err) {}
-                            
-                            const payload = {
-                                ...existing,
-                                category: item.category || existing.category,
-                                reorder_threshold: Number(item.reorder_threshold) || existing.reorder_threshold,
-                                current_stock: existing.current_stock + (Number(item.current_stock) || 0), // Add stock
-                                selling_price: Number(item.selling_price) || existing.selling_price,
-                                unit_cost: Number(item.unit_cost) || existing.unit_cost,
-                                expiry_dates: Array.from(new Set([...existingDates, ...parsedDates])),
-                                location: item.location || existing.location
-                            };
-                            await fetchWithAuth(`/products/${existing.product_id}`, { method: 'PUT', body: JSON.stringify(payload) });
-                            updateCount++;
-                        } else {
-                            const payload = {
-                                name: item.name,
-                                measure_unit: item.measure_unit,
-                                category: item.category,
-                                reorder_threshold: Number(item.reorder_threshold || 0),
-                                current_stock: Number(item.current_stock || 0),
-                                selling_price: Number(item.selling_price || 0),
-                                unit_cost: Number(item.unit_cost || 0),
-                                expiry_dates: parsedDates,
-                                location: item.location || ''
-                            };
-                            await fetchWithAuth('/products', { method: 'POST', body: JSON.stringify(payload) });
-                            successCount++;
-                        }
-                    } catch (err) {
-                        console.error('Import error for item', item.name, err);
-                        errorCount++;
-                    }
-                    setImportProgress(i + 1);
+                    }));
+                    setImportProgress(Math.min(i + batchSize, rows.length));
                 }
                 toast({ title: 'Import Complete', description: `Added: ${successCount}. Updated: ${updateCount}. Errors: ${errorCount}` });
                 loadData();

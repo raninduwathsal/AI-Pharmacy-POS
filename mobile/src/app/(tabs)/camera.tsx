@@ -25,7 +25,7 @@ export default function CameraScreen() {
     if (cameraRef.current) {
       try {
         setIsUploading(true);
-        const photo = await cameraRef.current.takePictureAsync({ base64: false, quality: 0.3 });
+        const photo = await cameraRef.current.takePictureAsync({ base64: false, quality: 0.3, shutterSound: false });
         if (!photo) throw new Error('No photo taken');
 
         const baseUrl = await AsyncStorage.getItem('backend_url');
