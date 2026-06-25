@@ -11,6 +11,7 @@ import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 interface Supplier { supplier_id: number; name: string; }
@@ -47,6 +48,8 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
     const [searchResults, setSearchResults] = useState<Record<string, ProductSearchResult[]>>({});
 
     const [activeTab, setActiveTab] = useState("new");
+    const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
+    const [jsonInput, setJsonInput] = useState("");
     const [history, setHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -162,6 +165,51 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleJsonImport = () => {
+        try {
+            let parsed;
+            try {
+                parsed = JSON.parse(jsonInput.trim());
+            } catch (e) {
+                // Try to strip out markdown blocks if the AI accidentally included them
+                const stripped = jsonInput.replace(/```json/g, '').replace(/```/g, '').trim();
+                parsed = JSON.parse(stripped);
+            }
+
+            if (!Array.isArray(parsed)) throw new Error("JSON must be an array of objects.");
+            
+            const newRows: GRNRow[] = [];
+            for (const item of parsed) {
+                const newId = Date.now().toString() + Math.random().toString(36).substring(2);
+                newRows.push({
+                    id: newId,
+                    product_id: null,
+                    product_name: item.product_name || "",
+                    expiry_date: item.expiry_date || "",
+                    purchased_quantity: Number(item.purchased_quantity) || 0,
+                    bonus_quantity: Number(item.bonus_quantity) || 0,
+                    unit_cost: Number(item.unit_cost) || 0,
+                });
+            }
+            
+            setItems(prev => [...prev, ...newRows]);
+            
+            // Trigger search for each imported row to pre-fetch dropdowns
+            newRows.forEach(row => {
+                if (row.product_name) {
+                    setSearchQueries(prev => ({ ...prev, [row.id]: row.product_name }));
+                    handleProductSearch(row.id, row.product_name);
+                }
+            });
+            
+            setIsJsonModalOpen(false);
+            setJsonInput("");
+            toast({ title: "JSON Imported", description: `Successfully imported ${newRows.length} rows. Please map the products from the dropdowns.` });
+        } catch (err: any) {
+            toast({ title: "Import Failed", description: err.message, variant: "destructive" });
         }
     };
 
@@ -306,9 +354,45 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-semibold">Invoice Lines</h3>
-                        <Button onClick={addRow} variant="secondary" size="sm" className="gap-2">
-                            <Plus className="h-4 w-4" /> Add Row
-                        </Button>
+                        <div className="flex space-x-2">
+                            <Dialog open={isJsonModalOpen} onOpenChange={setIsJsonModalOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm" className="gap-2">
+                                        Import JSON
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[600px]">
+                                    <DialogHeader>
+                                        <DialogTitle>Import AI JSON</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="space-y-4 pt-4">
+                                        <div className="p-3 bg-slate-50 border rounded-md text-sm text-slate-700 relative">
+                                            <p className="font-semibold mb-1">AI Prompt Template:</p>
+                                            <p className="mb-2">Copy this prompt and paste it into ChatGPT/Claude along with a photo of the supplier invoice:</p>
+                                            <div className="bg-slate-200 p-2 rounded text-xs font-mono mb-2 overflow-x-auto">
+                                                I have a supplier invoice. Please extract the items into a JSON array exactly matching this format: [{`{"product_name": "Panadol", "purchased_quantity": 10, "bonus_quantity": 0, "unit_cost": 150.50, "expiry_date": "YYYY-MM-DD"}`}]. Do not output any markdown or other text, only the raw JSON array.
+                                            </div>
+                                            <Button size="sm" variant="secondary" onClick={() => navigator.clipboard.writeText(`I have a supplier invoice. Please extract the items into a JSON array exactly matching this format: [{"product_name": "Panadol", "purchased_quantity": 10, "bonus_quantity": 0, "unit_cost": 150.50, "expiry_date": "YYYY-MM-DD"}]. Do not output any markdown or other text, only the raw JSON array.`)}>
+                                                Copy Prompt
+                                            </Button>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Paste JSON Output</Label>
+                                            <textarea 
+                                                className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                placeholder={`[\n  {\n    "product_name": "...",\n    "purchased_quantity": 10,\n    ...\n  }\n]`}
+                                                value={jsonInput}
+                                                onChange={(e) => setJsonInput(e.target.value)}
+                                            />
+                                        </div>
+                                        <Button className="w-full" onClick={handleJsonImport}>Import Rows</Button>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+                            <Button onClick={addRow} variant="secondary" size="sm" className="gap-2">
+                                <Plus className="h-4 w-4" /> Add Row
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="border rounded-md overflow-x-auto bg-white shadow-sm">
