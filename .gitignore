@@ -47,3 +47,4 @@ backend/build/
 *.local
 frontend/dist/
 frontend/dist-ssr/
+temporaryscratch/**

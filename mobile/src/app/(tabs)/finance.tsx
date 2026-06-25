@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Calendar } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,6 +9,9 @@ import { fetchWithAuth } from '../../lib/api';
 export default function FinanceScreen() {
   const [markedDates, setMarkedDates] = useState<any>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [checks, setChecks] = useState<any[]>([]);
+  const [selectedDateChecks, setSelectedDateChecks] = useState<any[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -20,6 +23,7 @@ export default function FinanceScreen() {
           try {
             const data = await fetchWithAuth('/finance/pending-checks');
             if (data) {
+              setChecks(data);
               const dates: any = {};
               data.forEach((check: any) => {
                 const dateStr = new Date(check.check_date).toISOString().split('T')[0];
@@ -49,6 +53,13 @@ export default function FinanceScreen() {
         ) : (
           <Calendar
             markedDates={markedDates}
+            onDayPress={(day: any) => {
+               const dayChecks = checks.filter(c => new Date(c.check_date).toISOString().split('T')[0] === day.dateString);
+               if (dayChecks.length > 0) {
+                   setSelectedDateChecks(dayChecks);
+                   setModalVisible(true);
+               }
+            }}
             theme={{
               todayTextColor: '#2563eb',
               arrowColor: '#2563eb',
@@ -57,6 +68,29 @@ export default function FinanceScreen() {
           />
         )}
       </View>
+
+      <Modal visible={modalVisible} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              Checks Due on {selectedDateChecks[0] && new Date(selectedDateChecks[0].check_date).toLocaleDateString()}
+            </Text>
+            <ScrollView style={{maxHeight: 400}}>
+              {selectedDateChecks.map((c, i) => (
+                <View key={i} style={styles.checkCard}>
+                  <Text style={styles.checkSupplier}>{c.supplier_name}</Text>
+                  <Text style={styles.checkDetails}>Amount: {Number(c.total_amount).toFixed(2)}</Text>
+                  <Text style={styles.checkDetails}>Invoice #: {c.supplier_invoice_number}</Text>
+                  <Text style={styles.checkDetails}>Check #: {c.check_number}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
+              <Text style={styles.closeBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -72,5 +106,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 3
-  }
+  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: '85%', backgroundColor: 'white', borderRadius: 12, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
+  checkCard: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0' },
+  checkSupplier: { fontSize: 16, fontWeight: 'bold', color: '#1e293b', marginBottom: 5 },
+  checkDetails: { fontSize: 14, color: '#475569', marginBottom: 2 },
+  closeBtn: { marginTop: 10, backgroundColor: '#3b82f6', padding: 12, borderRadius: 8, alignItems: 'center' },
+  closeBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
 });

@@ -51,6 +51,9 @@ export default function FinanceTab({
     const [selectedEmp, setSelectedEmp] = useState<any>(null);
     const [salaryForm, setSalaryForm] = useState({ base_salary: '', hourly_rate: '', standard_deductions: '' });
 
+    const [isCheckModalOpen, setIsCheckModalOpen] = useState(false);
+    const [selectedDateChecks, setSelectedDateChecks] = useState<PendingCheck[]>([]);
+
     // Sync local state when prop changes
     useEffect(() => {
         setLocalCurrency(currency);
@@ -296,6 +299,13 @@ export default function FinanceTab({
                             <Calendar
                                 mode="multiple"
                                 selected={checks.map(c => new Date(c.check_date))}
+                                onDayClick={(day) => {
+                                    const dayChecks = checks.filter(c => new Date(c.check_date).toDateString() === day.toDateString());
+                                    if (dayChecks.length > 0) {
+                                        setSelectedDateChecks(dayChecks);
+                                        setIsCheckModalOpen(true);
+                                    }
+                                }}
                                 className="rounded-md"
                             />
                         </CardContent>
@@ -541,6 +551,31 @@ export default function FinanceTab({
                         </div>
                         <Button type="submit" className="w-full">Process Payment</Button>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Calendar Check Details Dialog */}
+            <Dialog open={isCheckModalOpen} onOpenChange={setIsCheckModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Checks Due on {selectedDateChecks[0] && new Date(selectedDateChecks[0].check_date).toLocaleDateString()}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto">
+                        {selectedDateChecks.map((c) => (
+                            <div key={c.invoice_id} className="p-4 border rounded-lg bg-slate-50 space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="font-semibold text-slate-800">{c.supplier_name}</span>
+                                    <span className="font-bold text-red-600">{currency} {Number(c.total_amount).toFixed(2)}</span>
+                                </div>
+                                <div className="text-sm text-slate-600 grid grid-cols-2 gap-2">
+                                    <div><span className="text-slate-400">Invoice:</span> {c.supplier_invoice_number}</div>
+                                    <div><span className="text-slate-400">Check #:</span> {c.check_number}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

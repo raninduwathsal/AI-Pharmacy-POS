@@ -179,14 +179,23 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                 parsed = JSON.parse(stripped);
             }
 
-            if (!Array.isArray(parsed)) throw new Error("JSON must be an array of objects.");
+            let itemsArray = [];
+            if (Array.isArray(parsed)) {
+                itemsArray = parsed;
+            } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
+                if (parsed.invoice_number && parsed.invoice_number !== "INV-123") {
+                    setInvoiceNumber(parsed.invoice_number);
+                }
+                itemsArray = parsed.items;
+            } else {
+                throw new Error("JSON must be an array or an object containing an 'items' array.");
+            }
             
             const newRows: GRNRow[] = [];
-            setIsJsonModalOpen(false); // Close immediately to show loading state implicitly if we want, or just wait
-            
+            setIsJsonModalOpen(false); 
             toast({ title: "Importing...", description: "Matching products from database. Please wait." });
             
-            for (const item of parsed) {
+            for (const item of itemsArray) {
                 const newId = Date.now().toString() + Math.random().toString(36).substring(2);
                 const row: GRNRow = {
                     id: newId,
@@ -390,9 +399,9 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                                             <p className="font-semibold mb-1">AI Prompt Template:</p>
                                             <p className="mb-2">Copy this prompt and paste it into ChatGPT/Claude along with a photo of the supplier invoice:</p>
                                             <div className="bg-slate-200 p-2 rounded text-xs font-mono mb-2 overflow-x-auto">
-                                                I have a supplier invoice. Please extract the items into a JSON array exactly matching this format: [{`{"product_name": "Panadol", "purchased_quantity": 10, "bonus_quantity": 0, "unit_cost": 150.50, "expiry_date": "YYYY-MM-DD"}`}]. Do not output any markdown or other text, only the raw JSON array.
+                                                I have a supplier invoice. Please extract the invoice number and items into a JSON object exactly matching this format: {`{"invoice_number": "INV-123", "items": [{"product_name": "Panadol", "purchased_quantity": 10, "bonus_quantity": 0, "unit_cost": 150.50, "expiry_date": "YYYY-MM-DD"}]}`}. Do not output any markdown or other text, only the raw JSON object.
                                             </div>
-                                            <Button size="sm" variant="secondary" onClick={() => navigator.clipboard.writeText(`I have a supplier invoice. Please extract the items into a JSON array exactly matching this format: [{"product_name": "Panadol", "purchased_quantity": 10, "bonus_quantity": 0, "unit_cost": 150.50, "expiry_date": "YYYY-MM-DD"}]. Do not output any markdown or other text, only the raw JSON array.`)}>
+                                            <Button size="sm" variant="secondary" onClick={() => navigator.clipboard.writeText(`I have a supplier invoice. Please extract the invoice number and items into a JSON object exactly matching this format: {"invoice_number": "INV-123", "items": [{"product_name": "Panadol", "purchased_quantity": 10, "bonus_quantity": 0, "unit_cost": 150.50, "expiry_date": "YYYY-MM-DD"}]}. Do not output any markdown or other text, only the raw JSON object.`)}>
                                                 Copy Prompt
                                             </Button>
                                         </div>
@@ -400,7 +409,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                                             <Label>Paste JSON Output</Label>
                                             <textarea 
                                                 className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                                placeholder={`[\n  {\n    "product_name": "...",\n    "purchased_quantity": 10,\n    ...\n  }\n]`}
+                                                placeholder={`{\n  "invoice_number": "INV-001",\n  "items": [\n    {\n      "product_name": "...",\n      "purchased_quantity": 10,\n      ...\n    }\n  ]\n}`}
                                                 value={jsonInput}
                                                 onChange={(e) => setJsonInput(e.target.value)}
                                             />
