@@ -130,9 +130,9 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
             return;
         }
 
-        const invalidRow = items.find(b => !b.product_id || !b.expiry_date || b.purchased_quantity <= 0 || b.unit_cost <= 0);
+        const invalidRow = items.find(b => !b.product_id || b.purchased_quantity <= 0 || b.unit_cost <= 0);
         if (invalidRow) {
-            toast({ title: "Validation Error", description: "All rows must have a product, valid expiry, qty > 0, and cost > 0.", variant: "destructive" });
+            toast({ title: "Validation Error", description: "All rows must have a product, qty > 0, and cost > 0.", variant: "destructive" });
             return;
         }
 

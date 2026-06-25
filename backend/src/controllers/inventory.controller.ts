@@ -44,12 +44,19 @@ export const receiveStock = async (req: Request, res: Response) => {
         // Fetch measure_unit for the products to calculate multipliers
         const productIds = batches.map((b: any) => b.product_id);
         const [productsRows] = await connection.query<RowDataPacket[]>(
-            `SELECT product_id, measure_unit FROM Products WHERE product_id IN (?)`,
+            `SELECT product_id, measure_unit, expiry_dates FROM Products WHERE product_id IN (?)`,
             [productIds]
         );
-        const productUnits: Record<number, string> = {};
+        const productData: Record<number, any> = {};
         for (const row of productsRows) {
-            productUnits[row.product_id] = row.measure_unit;
+            let parsedDates: string[] = [];
+            try {
+                parsedDates = typeof row.expiry_dates === 'string' ? JSON.parse(row.expiry_dates) : (row.expiry_dates || []);
+            } catch (e) {}
+            productData[row.product_id] = {
+                measure_unit: row.measure_unit,
+                expiry_dates: parsedDates
+            };
         }
 
         const parseMultiplier = (unitStr: string | undefined): number => {
@@ -63,11 +70,18 @@ export const receiveStock = async (req: Request, res: Response) => {
         for (const batch of batches) {
             const rawQty = Number(batch.purchased_quantity) + Number(batch.bonus_quantity || 0);
             
-            const measureUnit = productUnits[batch.product_id] || '';
+            const pData = productData[batch.product_id] || { measure_unit: '', expiry_dates: [] };
+            const measureUnit = pData.measure_unit;
             const multiplier = parseMultiplier(measureUnit);
             
             const tabletsToAdd = rawQty * multiplier;
             const tabletCost = Number(batch.unit_cost) / multiplier;
+
+            let updatedDates = [...pData.expiry_dates];
+            if (batch.expiry_date && !updatedDates.includes(batch.expiry_date)) {
+                updatedDates.push(batch.expiry_date);
+            }
+            pData.expiry_dates = updatedDates; // Mutate for same product in multiple batches
 
             await connection.query(
                 `INSERT INTO Supplier_Invoice_Items 
@@ -79,7 +93,7 @@ export const receiveStock = async (req: Request, res: Response) => {
                     batch.purchased_quantity,
                     batch.bonus_quantity || 0,
                     batch.unit_cost,
-                    batch.expiry_date
+                    batch.expiry_date || null
                 ]
             );
 
@@ -89,9 +103,9 @@ export const receiveStock = async (req: Request, res: Response) => {
                 `UPDATE Products 
                  SET current_stock = current_stock + ?, 
                      unit_cost = ?, 
-                     expiry_dates = IF(expiry_dates IS NULL, JSON_ARRAY(?), JSON_ARRAY_APPEND(expiry_dates, '$', ?)) 
+                     expiry_dates = ? 
                  WHERE product_id = ?`,
-                [tabletsToAdd, tabletCost, batch.expiry_date, batch.expiry_date, batch.product_id]
+                [tabletsToAdd, tabletCost, JSON.stringify(updatedDates), batch.product_id]
             );
         }
 
