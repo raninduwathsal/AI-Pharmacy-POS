@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface Supplier { supplier_id: number; name: string; }
-interface ProductSearchResult { product_id: number; name: string; measure_unit: string; }
+interface ProductSearchResult { product_id: number; name: string; measure_unit: string; unit_cost?: number; }
 
 interface GRNRow {
     id: string;
@@ -105,9 +105,20 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
         } catch (error) { }
     };
 
+    const parseMultiplier = (unitStr: string): number => {
+        if (!unitStr) return 1;
+        const match = unitStr.match(/^(\d+)S$/i);
+        if (match) return parseInt(match[1], 10);
+        return 1;
+    };
+
     const selectProduct = (rowId: string, product: ProductSearchResult) => {
         updateRow(rowId, "product_id", product.product_id);
         updateRow(rowId, "product_name", `${product.name} (${product.measure_unit})`);
+        if (product.unit_cost) {
+            const multiplier = parseMultiplier(product.measure_unit);
+            updateRow(rowId, "unit_cost", Number((product.unit_cost * multiplier).toFixed(2)));
+        }
         setSearchQueries(prev => ({ ...prev, [rowId]: "" })); // Clear search
     };
 

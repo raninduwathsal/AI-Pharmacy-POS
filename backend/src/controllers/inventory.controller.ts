@@ -41,9 +41,33 @@ export const receiveStock = async (req: Request, res: Response) => {
         );
         const invoiceId = invoiceResult.insertId;
 
+        // Fetch measure_unit for the products to calculate multipliers
+        const productIds = batches.map((b: any) => b.product_id);
+        const [productsRows] = await connection.query<RowDataPacket[]>(
+            `SELECT product_id, measure_unit FROM Products WHERE product_id IN (?)`,
+            [productIds]
+        );
+        const productUnits: Record<number, string> = {};
+        for (const row of productsRows) {
+            productUnits[row.product_id] = row.measure_unit;
+        }
+
+        const parseMultiplier = (unitStr: string | undefined): number => {
+            if (!unitStr) return 1;
+            const match = unitStr.match(/^(\d+)S$/i);
+            if (match) return parseInt(match[1], 10);
+            return 1;
+        };
+
         // 3. Insert Supplier_Invoice_Items AND Update Products.current_stock
         for (const batch of batches) {
-            const qty = Number(batch.purchased_quantity) + Number(batch.bonus_quantity || 0);
+            const rawQty = Number(batch.purchased_quantity) + Number(batch.bonus_quantity || 0);
+            
+            const measureUnit = productUnits[batch.product_id] || '';
+            const multiplier = parseMultiplier(measureUnit);
+            
+            const tabletsToAdd = rawQty * multiplier;
+            const tabletCost = Number(batch.unit_cost) / multiplier;
 
             await connection.query(
                 `INSERT INTO Supplier_Invoice_Items 
@@ -67,7 +91,7 @@ export const receiveStock = async (req: Request, res: Response) => {
                      unit_cost = ?, 
                      expiry_dates = IF(expiry_dates IS NULL, JSON_ARRAY(?), JSON_ARRAY_APPEND(expiry_dates, '$', ?)) 
                  WHERE product_id = ?`,
-                [qty, batch.unit_cost, batch.expiry_date, batch.expiry_date, batch.product_id]
+                [tabletsToAdd, tabletCost, batch.expiry_date, batch.expiry_date, batch.product_id]
             );
         }
 
