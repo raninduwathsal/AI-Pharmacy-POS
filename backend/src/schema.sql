@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS Supplier_Invoice_Items (
     purchased_quantity INT NOT NULL,
     bonus_quantity INT NOT NULL DEFAULT 0,
     unit_cost DECIMAL(10,2) NOT NULL,
+    pack_size INT NOT NULL DEFAULT 1,
     expiry_date DATE,
     FOREIGN KEY (supplier_invoice_id) REFERENCES Supplier_Invoices(invoice_id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES Products(product_id) ON DELETE RESTRICT

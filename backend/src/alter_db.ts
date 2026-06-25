@@ -49,6 +49,17 @@ async function run() {
         console.log('Successfully created Prescription_Book tables.');
     } catch (e: any) {
         console.error('Error creating Prescription_Book tables:', e);
+    }
+
+    try {
+        await pool.query('ALTER TABLE Supplier_Invoice_Items ADD COLUMN pack_size INT NOT NULL DEFAULT 1;');
+        console.log('Successfully added pack_size to Supplier_Invoice_Items table.');
+    } catch (e: any) {
+        if (e.code === 'ER_DUP_FIELDNAME') {
+            console.log('Supplier_Invoice_Items pack_size already exists.');
+        } else {
+            console.error('Error altering Supplier_Invoice_Items:', e);
+        }
     } finally {
         process.exit(0);
     }

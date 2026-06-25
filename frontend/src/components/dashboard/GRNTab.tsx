@@ -25,6 +25,7 @@ interface GRNRow {
     purchased_quantity: number;
     bonus_quantity: number;
     unit_cost: number;
+    pack_size: number;
 }
 
 export default function GRNTab({ currency = '$' }: { currency?: string }) {
@@ -84,7 +85,8 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
     const addRow = () => {
         setItems([...items, {
             id: crypto.randomUUID(), product_id: null, product_name: "",
-            expiry_date: "", purchased_quantity: 0, bonus_quantity: 0, unit_cost: 0
+            expiry_date: "", purchased_quantity: 0, bonus_quantity: 0, unit_cost: 0,
+            pack_size: 1
         }]);
     };
 
@@ -116,12 +118,24 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
     };
 
     const selectProduct = (rowId: string, product: ProductSearchResult) => {
-        updateRow(rowId, "product_id", product.product_id);
-        updateRow(rowId, "product_name", `${product.name} (${product.measure_unit})`);
-        if (product.unit_cost) {
-            const multiplier = parseMultiplier(product.measure_unit);
-            updateRow(rowId, "unit_cost", Number((product.unit_cost * multiplier).toFixed(2)));
-        }
+        setItems(prev => prev.map(b => {
+            if (b.id === rowId) {
+                const hasExistingCost = b.unit_cost > 0;
+                let newCost = b.unit_cost;
+                const multiplier = parseMultiplier(product.measure_unit);
+                if (product.unit_cost && !hasExistingCost) {
+                    newCost = Number((product.unit_cost * multiplier).toFixed(2));
+                }
+                return {
+                    ...b,
+                    product_id: product.product_id,
+                    product_name: `${product.name} (${product.measure_unit})`,
+                    unit_cost: newCost,
+                    pack_size: multiplier
+                };
+            }
+            return b;
+        }));
         setSearchQueries(prev => ({ ...prev, [rowId]: "" })); // Clear search
     };
 
@@ -133,9 +147,9 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
             return;
         }
 
-        const invalidRow = items.find(b => !b.product_id || b.purchased_quantity <= 0 || b.unit_cost <= 0);
+        const invalidRow = items.find(b => !b.product_id || b.purchased_quantity <= 0 || b.unit_cost <= 0 || b.pack_size <= 0);
         if (invalidRow) {
-            toast({ title: "Validation Error", description: "All rows must have a product, qty > 0, and cost > 0.", variant: "destructive" });
+            toast({ title: "Validation Error", description: "All rows must have a product, pack size > 0, qty > 0, and cost > 0.", variant: "destructive" });
             return;
         }
 
@@ -152,7 +166,8 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                     expiry_date: b.expiry_date,
                     purchased_quantity: Number(b.purchased_quantity),
                     bonus_quantity: Number(b.bonus_quantity),
-                    unit_cost: Number(b.unit_cost)
+                    unit_cost: Number(b.unit_cost),
+                    pack_size: Number(b.pack_size) || 1
                 }))
             };
 
@@ -205,6 +220,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                     purchased_quantity: Number(item.purchased_quantity) || 0,
                     bonus_quantity: Number(item.bonus_quantity) || 0,
                     unit_cost: Number(item.unit_cost) || 0,
+                    pack_size: 1
                 };
 
                 if (row.product_name) {
@@ -223,9 +239,11 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                             row.product_id = bestMatch.product_id;
                             row.product_name = `${bestMatch.name} (${bestMatch.measure_unit})`;
                             
+                            const multiplier = parseMultiplier(bestMatch.measure_unit);
+                            row.pack_size = multiplier;
+                            
                             // If JSON didn't provide a cost, auto-populate from DB
                             if (!row.unit_cost && bestMatch.unit_cost) {
-                                const multiplier = parseMultiplier(bestMatch.measure_unit);
                                 row.unit_cost = Number((bestMatch.unit_cost * multiplier).toFixed(2));
                             }
                         }
@@ -430,6 +448,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                                 <TableRow>
                                     <TableHead className="w-[300px]">Product</TableHead>
                                     <TableHead>Expiry</TableHead>
+                                    <TableHead className="w-[100px]">Pack Size</TableHead>
                                     <TableHead className="w-[100px]">Purch. Qty</TableHead>
                                     <TableHead className="w-[100px]">Bonus Qty</TableHead>
                                     <TableHead className="w-[120px]">Unit Cost ({currency})</TableHead>
@@ -488,6 +507,9 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                                             <Input type="date" value={row.expiry_date} onChange={e => updateRow(row.id, "expiry_date", e.target.value)} />
                                         </TableCell>
                                         <TableCell>
+                                            <Input type="number" min="1" value={row.pack_size || ''} onChange={e => updateRow(row.id, "pack_size", Number(e.target.value) || 1)} />
+                                        </TableCell>
+                                        <TableCell>
                                             <Input type="number" min="0" value={row.purchased_quantity || ''} onChange={e => updateRow(row.id, "purchased_quantity", e.target.value)} />
                                         </TableCell>
                                         <TableCell>
@@ -508,7 +530,7 @@ export default function GRNTab({ currency = '$' }: { currency?: string }) {
                                 ))}
                                 {items.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-10 text-slate-500">
+                                        <TableCell colSpan={8} className="text-center py-10 text-slate-500">
                                             Start adding products to this invoice using the Add Row button above.
                                         </TableCell>
                                     </TableRow>

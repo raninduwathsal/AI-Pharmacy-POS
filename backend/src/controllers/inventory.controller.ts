@@ -74,8 +74,10 @@ export const receiveStock = async (req: Request, res: Response) => {
             const measureUnit = pData.measure_unit;
             const multiplier = parseMultiplier(measureUnit);
             
-            const tabletsToAdd = rawQty * multiplier;
-            const tabletCost = Number(batch.unit_cost) / multiplier;
+            const packSize = Number(batch.pack_size) > 0 ? Number(batch.pack_size) : multiplier;
+            
+            const tabletsToAdd = rawQty * packSize;
+            const tabletCost = Number(batch.unit_cost) / packSize;
 
             let updatedDates = [...pData.expiry_dates];
             if (batch.expiry_date && !updatedDates.includes(batch.expiry_date)) {
@@ -85,14 +87,15 @@ export const receiveStock = async (req: Request, res: Response) => {
 
             await connection.query(
                 `INSERT INTO Supplier_Invoice_Items 
-                (supplier_invoice_id, product_id, purchased_quantity, bonus_quantity, unit_cost, expiry_date) 
-                VALUES (?, ?, ?, ?, ?, ?)`,
+                (supplier_invoice_id, product_id, purchased_quantity, bonus_quantity, unit_cost, pack_size, expiry_date) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
                 [
                     invoiceId,
                     batch.product_id,
                     batch.purchased_quantity,
                     batch.bonus_quantity || 0,
                     batch.unit_cost,
+                    packSize,
                     batch.expiry_date || null
                 ]
             );
@@ -105,7 +108,7 @@ export const receiveStock = async (req: Request, res: Response) => {
                      unit_cost = ?, 
                      expiry_dates = ? 
                  WHERE product_id = ?`,
-                [tabletsToAdd, tabletCost, JSON.stringify(updatedDates), batch.product_id]
+                 [tabletsToAdd, tabletCost, JSON.stringify(updatedDates), batch.product_id]
             );
         }
 
