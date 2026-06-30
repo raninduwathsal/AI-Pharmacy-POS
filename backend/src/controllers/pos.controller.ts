@@ -605,7 +605,26 @@ export const uploadMobilePrescription = async (req: AuthRequest, res: Response) 
         }
 
         const filename = `${Date.now()}-${file.originalname || 'mobile_upload.jpg'}`;
-        const uploadPath = path.join(__dirname, '../../public/uploads', filename);
+        const uploadDir = path.join(__dirname, '../../public/uploads');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        } else {
+            // Lazy cleanup: Delete files older than 1 hour to prevent storage bloat
+            try {
+                const files = fs.readdirSync(uploadDir);
+                const now = Date.now();
+                files.forEach(f => {
+                    const filePath = path.join(uploadDir, f);
+                    const stats = fs.statSync(filePath);
+                    if (now - stats.mtimeMs > 60 * 60 * 1000) { // 1 hour
+                        fs.unlinkSync(filePath);
+                    }
+                });
+            } catch (cleanupErr) {
+                console.error("Cleanup error:", cleanupErr);
+            }
+        }
+        const uploadPath = path.join(uploadDir, filename);
         fs.writeFileSync(uploadPath, file.buffer);
 
         const backendUrl = process.env.VITE_API_URL ? process.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
