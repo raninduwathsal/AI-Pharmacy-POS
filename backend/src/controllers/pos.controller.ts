@@ -431,13 +431,16 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
             });
         };
 
-        let response;
+        let response: any;
         try {
             console.log("Starting Gemini API call with model gemini-2.5-flash");
             response = await callGemini(apiKey || fallbackApiKey || '');
-            console.log("Gemini API call successful");
+            console.log(`Gemini API call successful. Token Usage:`, JSON.stringify(response?.usageMetadata || {}));
         } catch (error: any) {
             console.error("Primary Gemini API call failed:", error?.message || error);
+            if (error?.response) {
+                console.error("Primary Gemini API error details:", JSON.stringify(error.response, null, 2));
+            }
             
             const is503 = (err: any) => err?.status === 503 || err?.message?.includes('503') || err?.message?.includes('Service Unavailable');
             
@@ -445,9 +448,12 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
                 console.log("503 encountered. Attempting fallback API key...");
                 try {
                     response = await callGemini(fallbackApiKey);
-                    console.log("Fallback Gemini API call successful");
+                    console.log(`Fallback Gemini API call successful. Token Usage:`, JSON.stringify(response?.usageMetadata || {}));
                 } catch (fallbackError: any) {
                     console.error("Fallback Gemini API call failed:", fallbackError?.message || fallbackError);
+                    if (fallbackError?.response) {
+                        console.error("Fallback Gemini API error details:", JSON.stringify(fallbackError.response, null, 2));
+                    }
                     
                     if (is503(fallbackError)) {
                         io.emit('ai_processing_status', { message: 'High traffic. Entering exponential backoff retries...' });
@@ -464,11 +470,14 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
                             
                             try {
                                 response = await callGemini(fallbackApiKey);
-                                console.log(`Exponential backoff attempt ${attempt} successful`);
+                                console.log(`Exponential backoff attempt ${attempt} successful. Token Usage:`, JSON.stringify(response?.usageMetadata || {}));
                                 success = true;
                                 break;
                             } catch (backoffError: any) {
                                 console.error(`Exponential backoff attempt ${attempt} failed:`, backoffError?.message || backoffError);
+                                if (backoffError?.response) {
+                                    console.error(`Exponential backoff attempt ${attempt} error details:`, JSON.stringify(backoffError.response, null, 2));
+                                }
                                 if (attempt >= maxRetries) {
                                     throw new Error('AI service is currently unavailable after multiple retries.');
                                 }
@@ -486,7 +495,12 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
                 console.log("Non-503 error, attempting fallback API key...");
                 try {
                     response = await callGemini(fallbackApiKey);
+                    console.log(`Fallback Gemini API call (non-503 path) successful. Token Usage:`, JSON.stringify(response?.usageMetadata || {}));
                 } catch (fallbackError: any) {
+                    console.error("Fallback Gemini API call (non-503 path) failed:", fallbackError?.message || fallbackError);
+                    if (fallbackError?.response) {
+                        console.error("Fallback Gemini API (non-503 path) error details:", JSON.stringify(fallbackError.response, null, 2));
+                    }
                     throw fallbackError;
                 }
             } else {

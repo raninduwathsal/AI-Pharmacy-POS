@@ -14,6 +14,12 @@ export const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(cors());
 app.use(express.json());
+
+// Global Request Logger
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
 import path from 'path';
 app.use('/uploads', express.static(path.join(__dirname, '../../public/uploads')));
 

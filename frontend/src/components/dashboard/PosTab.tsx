@@ -296,6 +296,41 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
         }
     };
 
+    const processMobileImage = async () => {
+        if (!uploadedImageUrl) return;
+        setAiStatusMessage("Uploading and Scanning...");
+        setIsUploadingAi(true);
+
+        try {
+            const response = await fetch(uploadedImageUrl);
+            if (!response.ok) throw new Error("Failed to fetch image");
+            const blob = await response.blob();
+            
+            const formData = new FormData();
+            formData.append('image', blob, 'mobile-upload.jpg');
+
+            const token = localStorage.getItem('token');
+            const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+            const uploadResponse = await fetch(`${backendUrl}/pos/upload-prescription`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            const data = await uploadResponse.json();
+            if (!uploadResponse.ok) {
+                throw new Error(data.error || 'Failed to process image');
+            }
+            toast({ title: 'AI OCR Complete', description: 'Image processed successfully. Loading review screen...' });
+        } catch (error: any) {
+            toast({ title: 'Upload Failed', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsUploadingAi(false);
+        }
+    };
+
     // --- Auto-add Empty Rows ---
     useEffect(() => {
         const hasRx = cart.some(item => item.type === 'rx');
@@ -790,7 +825,12 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div className="flex justify-between items-center mb-2">
                                             <h2 className="text-xl font-bold text-slate-800">Prescription Image</h2>
-                                            <Button variant="ghost" size="sm" onClick={() => setUploadedImageUrl(null)}>Clear Image</Button>
+                                            <div className="flex gap-2">
+                                                <Button variant="default" size="sm" onClick={processMobileImage} disabled={isUploadingAi}>
+                                                    {isUploadingAi ? "Processing..." : "Process AI"}
+                                                </Button>
+                                                <Button variant="ghost" size="sm" onClick={() => setUploadedImageUrl(null)}>Clear Image</Button>
+                                            </div>
                                         </div>
                                         <img src={uploadedImageUrl} alt="Uploaded Prescription" className="max-h-96 object-contain rounded-md border w-full bg-slate-50" />
                                     </div>

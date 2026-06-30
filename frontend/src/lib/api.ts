@@ -3,7 +3,9 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:50
 export const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('token');
     const headers = new Headers(options.headers);
-    headers.set('Content-Type', 'application/json');
+    if (!(options.body instanceof FormData)) {
+        headers.set('Content-Type', 'application/json');
+    }
 
     if (token) {
         headers.set('Authorization', `Bearer ${token}`);
