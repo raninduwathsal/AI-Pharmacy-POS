@@ -183,7 +183,10 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
         const searchParams = new URLSearchParams(window.location.search);
         const mobileScan = searchParams.get('mobile_scan');
         if (mobileScan) {
-            setUploadedImageUrl(mobileScan);
+            const imgData = localStorage.getItem('mobile_scan_image');
+            if (imgData) {
+                setUploadedImageUrl(imgData);
+            }
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
@@ -218,11 +221,15 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
 
         socketRef.current.on('new_prescription_photo', (data: { photo_url: string }) => {
             console.log("New photo received from mobile");
+            
+            // Store the massive base64 string in localStorage to avoid URI_TOO_LONG error on new tab
+            localStorage.setItem('mobile_scan_image', data.photo_url);
+
             toast({
                 title: 'New Scan Received',
                 description: 'A new prescription image was uploaded from mobile.',
                 action: (
-                    <ToastAction altText="Open Scan" onClick={() => window.open(`${window.location.pathname}?mobile_scan=${encodeURIComponent(data.photo_url)}`, '_blank')}>Open</ToastAction>
+                    <ToastAction altText="Open Scan" onClick={() => window.open(`${window.location.pathname}?mobile_scan=true`, '_blank')}>Open</ToastAction>
                 ),
             });
         });
