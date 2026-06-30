@@ -375,7 +375,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                     }
                 }
 
-                if (e.altKey && e.key.toLowerCase() === 'd') {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
                     e.preventDefault();
                     if (activeAiRowIndex >= 0 && activeAiRowIndex < aiLines.length) {
                         const newLines = [...aiLines];
@@ -437,7 +437,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                 moneyGivenRef.current?.select();
             }
 
-            if (e.altKey && e.key.toLowerCase() === 'd') {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
                 e.preventDefault();
                 if (activeRowIndex >= 0 && activeRowIndex < rxItems.length) {
                     removeCartRow(rxItems[activeRowIndex].id);
@@ -842,7 +842,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                             </TableHeader>
                                             <TableBody>
                                                 {cart.filter(r => r.type === "rx").map((row, index) => (
-                                                    <TableRow key={row.id} className={cn(activeRowIndex === index && "bg-indigo-50/80 relative z-[9999]")}>
+                                                    <TableRow key={row.id} className={cn(activeRowIndex === index && "bg-indigo-100 scale-[1.01] shadow-sm transform transition-all border-l-4 border-l-indigo-500 relative z-[9999]")}>
                                                         <TableCell className="relative">
                                                             {!row.product_id ? (
                                                                 <Popover open={openProductBox === row.id} onOpenChange={(isOpen) => setOpenProductBox(isOpen ? row.id : null)}>
@@ -910,11 +910,11 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                             <FrequencyHint show={modifiers.shift && activeRowIndex === index} />
                                                         </TableCell>
                                                         <TableCell className="relative">
-                                                            <Input ref={el => { qtyRefs.current[row.id] = el; }} type="number" min="1" value={row.quantity || ''} onChange={e => updateCartRow(row.id, "quantity", Number(e.target.value))} />
+                                                            <Input ref={el => { qtyRefs.current[row.id] = el; }} className="w-24 text-right" type="number" min="1" value={row.quantity || ''} onChange={e => updateCartRow(row.id, "quantity", Number(e.target.value))} />
                                                             <ShortcutHint show={modifiers.alt && activeRowIndex === index} label="Alt+Q" />
                                                         </TableCell>
                                                         <TableCell className="relative">
-                                                            <Input ref={el => { priceRefs.current[row.id] = el; }} type="number" min="0" step="0.01" value={row.unit_price || ''} onChange={e => updateCartRow(row.id, "unit_price", Number(e.target.value))} />
+                                                            <Input ref={el => { priceRefs.current[row.id] = el; }} className="w-28 text-right" type="number" min="0" step="0.01" value={row.unit_price || ''} onChange={e => updateCartRow(row.id, "unit_price", Number(e.target.value))} />
                                                             <ShortcutHint show={modifiers.alt && activeRowIndex === index} label="Alt+U" />
                                                         </TableCell>
                                                         <TableCell className="text-right font-medium text-slate-700">
@@ -1020,10 +1020,10 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                             </Select>
                                                         </TableCell>
                                                         <TableCell className="relative">
-                                                            <Input ref={el => { qtyRefs.current[row.id] = el; }} type="number" min="1" value={row.quantity || ''} onChange={e => updateCartRow(row.id, "quantity", Number(e.target.value))} />
+                                                            <Input ref={el => { qtyRefs.current[row.id] = el; }} className="w-24 text-right" type="number" min="1" value={row.quantity || ''} onChange={e => updateCartRow(row.id, "quantity", Number(e.target.value))} />
                                                         </TableCell>
                                                         <TableCell className="relative">
-                                                            <Input ref={el => { priceRefs.current[row.id] = el; }} type="number" min="0" step="0.01" value={row.unit_price || ''} onChange={e => updateCartRow(row.id, "unit_price", Number(e.target.value))} />
+                                                            <Input ref={el => { priceRefs.current[row.id] = el; }} className="w-28 text-right" type="number" min="0" step="0.01" value={row.unit_price || ''} onChange={e => updateCartRow(row.id, "unit_price", Number(e.target.value))} />
                                                         </TableCell>
                                                         <TableCell className="text-right font-medium text-slate-700">
                                                             {currency}{(Number(row.quantity || 0) * Number(row.unit_price || 0)).toFixed(2)}
@@ -1161,7 +1161,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                             <TableBody>
                                 {aiLines.map((line, idx) => (
                                     <TableRow key={idx} className={cn(
-                                        activeAiRowIndex === idx && "bg-indigo-50/80 relative z-[9999]",
+                                        activeAiRowIndex === idx && "bg-indigo-100 scale-[1.01] shadow-sm transform transition-all border-l-4 border-l-indigo-500 relative z-[9999]",
                                         activeAiRowIndex !== idx && line.matched_product_id ? "bg-green-50/50" : "",
                                         activeAiRowIndex !== idx && !line.matched_product_id ? "bg-amber-50/50" : ""
                                     )}>
@@ -1211,7 +1211,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                 ref={el => { aiQtyRefs.current[idx] = el; }}
                                                 type="number" 
                                                 min="1" 
-                                                className="h-8 w-16 text-xs bg-white" 
+                                                className="h-8 w-24 text-xs bg-white text-right" 
                                                 value={line.total_amount || ''} 
                                                 onChange={(e) => {
                                                     const newLines = [...aiLines];
