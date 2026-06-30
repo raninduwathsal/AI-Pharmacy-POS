@@ -59,6 +59,28 @@ interface SaleHistory {
     cashier_name: string;
 }
 
+const ShortcutHint = ({ show, label }: { show: boolean, label: string }) => {
+    if (!show) return null;
+    return <span className="absolute -top-2 -right-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-white font-bold z-[99999] shadow-sm pointer-events-none whitespace-nowrap">{label}</span>;
+};
+
+const FrequencyHint = ({ show }: { show: boolean }) => {
+    if (!show) return null;
+    return (
+        <div className="absolute top-12 left-0 bg-slate-800 text-white text-sm p-3 rounded-lg shadow-2xl z-[99999] pointer-events-none border border-slate-600 flex flex-wrap gap-x-3 gap-y-2 min-w-[280px]">
+            <span className="text-slate-300 w-full mb-1 border-b border-slate-600 pb-1 font-semibold text-base">Hold Shift + Letter</span>
+            <span className="w-[45%]"><strong className="bg-slate-700 px-1 rounded text-white mr-1">O</strong> OD (1/day)</span>
+            <span className="w-[45%]"><strong className="bg-slate-700 px-1 rounded text-white mr-1">B</strong> BID (2/day)</span>
+            <span className="w-[45%]"><strong className="bg-slate-700 px-1 rounded text-white mr-1">T</strong> TID (3/day)</span>
+            <span className="w-[45%]"><strong className="bg-slate-700 px-1 rounded text-white mr-1">Q</strong> QID (4/day)</span>
+            <span className="w-[45%]"><strong className="bg-slate-700 px-1 rounded text-white mr-1">4</strong> Q4H</span>
+            <span className="w-[45%]"><strong className="bg-slate-700 px-1 rounded text-white mr-1">8</strong> Q8H</span>
+            <span className="w-[45%]"><strong className="bg-slate-700 px-1 rounded text-white mr-1">S</strong> STAT</span>
+            <span className="w-[45%]"><strong className="bg-slate-700 px-1 rounded text-white mr-1">P</strong> PRN</span>
+        </div>
+    );
+};
+
 export default function PosTab({ currency = '$', canManageSales = false }: { currency?: string, canManageSales?: boolean }) {
     const { toast } = useToast();
     const navigate = useNavigate();
@@ -96,6 +118,15 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("sale");
+
+    // Keyboard Navigation State
+    const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
+    const [modifiers, setModifiers] = useState({ ctrl: false, alt: false, shift: false });
+    const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
+    const priceRefs = useRef<Record<string, HTMLInputElement | null>>({});
+    const patientNameRef = useRef<HTMLInputElement>(null);
+    const patientAgeRef = useRef<HTMLInputElement>(null);
+    const moneyGivenRef = useRef<HTMLInputElement>(null);
 
     const [isUploadingAi, setIsUploadingAi] = useState(false);
     const [aiStatusMessage, setAiStatusMessage] = useState<string>("Scanning with AI...");
@@ -192,6 +223,30 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
         }
     };
 
+    // --- Auto-add Empty Rows ---
+    useEffect(() => {
+        const hasRx = cart.some(item => item.type === 'rx');
+        const hasOtc = cart.some(item => item.type === 'otc');
+        const rxEmpty = cart.some(item => item.type === 'rx' && item.product_id === null);
+        const otcEmpty = cart.some(item => item.type === 'otc' && item.product_id === null);
+
+        let newCart = [...cart];
+        let changed = false;
+
+        if (hasRx && !rxEmpty) {
+            newCart.push({ id: crypto.randomUUID(), product_id: null, product_name: "", quantity: 1, unit_price: 0, frequency: "", type: "rx" });
+            changed = true;
+        }
+        if (hasOtc && !otcEmpty) {
+            newCart.push({ id: crypto.randomUUID(), product_id: null, product_name: "", quantity: 1, unit_price: 0, frequency: "", type: "otc" });
+            changed = true;
+        }
+
+        if (changed) {
+            setCart(newCart);
+        }
+    }, [cart]);
+
     // --- Search Logic ---
     const handleSearch = async (rowId: string, q: string) => {
         setSearchQueries(prev => ({ ...prev, [rowId]: q }));
@@ -210,6 +265,95 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             setAiSearchResults(prev => ({ ...prev, [index]: data }));
         } catch (err) { }
     };
+
+    // --- Keyboard Navigation ---
+    useEffect(() => {
+        if (activeTab !== "sale") return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            setModifiers({
+                ctrl: e.ctrlKey || e.metaKey,
+                alt: e.altKey,
+                shift: e.shiftKey
+            });
+            const isInputFocus = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '');
+            const rxItems = cart.filter(item => item.type === 'rx');
+
+            if (e.key === 'ArrowDown') {
+                if (!isInputFocus) {
+                    e.preventDefault();
+                    setActiveRowIndex(prev => Math.min(rxItems.length - 1, prev + 1));
+                }
+            } else if (e.key === 'ArrowUp') {
+                if (!isInputFocus) {
+                    e.preventDefault();
+                    setActiveRowIndex(prev => Math.max(0, prev - 1));
+                }
+            }
+
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                patientNameRef.current?.focus();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                patientAgeRef.current?.focus();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                moneyGivenRef.current?.focus();
+                moneyGivenRef.current?.select();
+            }
+
+            if (activeRowIndex >= 0 && activeRowIndex < rxItems.length) {
+                const activeRowId = rxItems[activeRowIndex].id;
+
+                if (e.altKey && e.key.toLowerCase() === 'q') {
+                    e.preventDefault();
+                    qtyRefs.current[activeRowId]?.focus();
+                    qtyRefs.current[activeRowId]?.select();
+                }
+                if (e.altKey && e.key.toLowerCase() === 'u') {
+                    e.preventDefault();
+                    priceRefs.current[activeRowId]?.focus();
+                    priceRefs.current[activeRowId]?.select();
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+                    e.preventDefault();
+                    setOpenProductBox(activeRowId);
+                }
+                
+                if (e.shiftKey && !e.ctrlKey && !e.altKey && !isInputFocus) {
+                    const key = e.key.toUpperCase();
+                    const freqMap: Record<string, string> = { 'O': 'OD', 'B': 'BID', 'T': 'TID', 'Q': 'QID', '4': 'Q4H', '8': 'Q8H', 'S': 'STAT', 'P': 'PRN' };
+                    if (freqMap[key]) {
+                        e.preventDefault();
+                        updateCartRow(activeRowId, "frequency", freqMap[key]);
+                    }
+                }
+            }
+        };
+
+        const handleKeyUp = (e: KeyboardEvent) => {
+            setModifiers({
+                ctrl: e.ctrlKey || e.metaKey,
+                alt: e.altKey,
+                shift: e.shiftKey
+            });
+        };
+
+        const handleWindowBlur = () => setModifiers({ ctrl: false, alt: false, shift: false });
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        window.addEventListener('blur', handleWindowBlur);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+            window.removeEventListener('blur', handleWindowBlur);
+        };
+    }, [cart, activeRowIndex, activeTab]);
 
     // --- Cart Manipulation ---
     const updateCartRow = (id: string, field: keyof CartItem, value: any) => {
@@ -466,9 +610,10 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                         <span className="text-2xl text-blue-700">{currency}{discountedTotal.toFixed(2)}</span>
                                     </div>
 
-                                    <div className="space-y-1 mt-4">
+                                    <div className="space-y-1 mt-4 relative">
                                         <Label>Money Given</Label>
                                         <Input
+                                            ref={moneyGivenRef}
                                             type="number"
                                             min="0"
                                             step="0.01"
@@ -476,6 +621,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                             onChange={(e) => setMoneyGiven(e.target.value ? Number(e.target.value) : 0)}
                                             className="text-lg font-semibold"
                                         />
+                                        <ShortcutHint show={modifiers.ctrl} label="Ctrl+M" />
                                     </div>
 
                                     <div className="flex justify-between items-center text-sm">
@@ -531,17 +677,19 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4 bg-white p-3 rounded-lg border shadow-sm">
-                                        <div className="space-y-1">
+                                        <div className="space-y-1 relative">
                                             <Label>Patient Name (Prescription)</Label>
-                                            <Input placeholder="Optional..." value={prescriptionPatientName} onChange={(e) => setPrescriptionPatientName(e.target.value)} />
+                                            <Input ref={patientNameRef} placeholder="Optional..." value={prescriptionPatientName} onChange={(e) => setPrescriptionPatientName(e.target.value)} />
+                                            <ShortcutHint show={modifiers.ctrl} label="Ctrl+N" />
                                         </div>
-                                        <div className="space-y-1">
+                                        <div className="space-y-1 relative">
                                             <Label>Patient Age</Label>
-                                            <Input type="number" placeholder="Optional..." value={prescriptionPatientAge} onChange={(e) => setPrescriptionPatientAge(e.target.value)} />
+                                            <Input ref={patientAgeRef} type="number" placeholder="Optional..." value={prescriptionPatientAge} onChange={(e) => setPrescriptionPatientAge(e.target.value)} />
+                                            <ShortcutHint show={modifiers.ctrl} label="Ctrl+A" />
                                         </div>
                                     </div>
-                                    <div className="border rounded-md bg-white shadow-sm overflow-hidden">
-                                        <Table>
+                                    <div className="border rounded-md bg-white shadow-sm overflow-visible">
+                                        <Table wrapperClassName="overflow-visible">
                                             <TableHeader className="bg-slate-50">
                                                 <TableRow>
                                                     <TableHead className="w-[300px]">Search Product</TableHead>
@@ -553,9 +701,9 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {cart.filter(r => r.type === "rx").map((row) => (
-                                                    <TableRow key={row.id}>
-                                                        <TableCell>
+                                                {cart.filter(r => r.type === "rx").map((row, index) => (
+                                                    <TableRow key={row.id} className={cn(activeRowIndex === index && "bg-indigo-50/80 relative z-[9999]")}>
+                                                        <TableCell className="relative">
                                                             {!row.product_id ? (
                                                                 <Popover open={openProductBox === row.id} onOpenChange={(isOpen) => setOpenProductBox(isOpen ? row.id : null)}>
                                                                     <PopoverTrigger asChild>
@@ -601,8 +749,9 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-300 hover:text-red-600" onClick={() => { updateCartRow(row.id, "product_id", null); updateCartRow(row.id, "product_name", ""); }}>✕</Button>
                                                                 </div>
                                                             )}
+                                                            <ShortcutHint show={modifiers.ctrl && activeRowIndex === index} label="Ctrl+F" />
                                                         </TableCell>
-                                                        <TableCell>
+                                                        <TableCell className="relative">
                                                             <Select value={row.frequency} onValueChange={v => updateCartRow(row.id, "frequency", v)}>
                                                                 <SelectTrigger className="w-[110px] bg-white">
                                                                     <SelectValue placeholder="Freq..." />
@@ -618,12 +767,15 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                                     <SelectItem value="PRN">PRN (As needed)</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
+                                                            <FrequencyHint show={modifiers.shift && activeRowIndex === index} />
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <Input type="number" min="1" value={row.quantity || ''} onChange={e => updateCartRow(row.id, "quantity", Number(e.target.value))} />
+                                                        <TableCell className="relative">
+                                                            <Input ref={el => { qtyRefs.current[row.id] = el; }} type="number" min="1" value={row.quantity || ''} onChange={e => updateCartRow(row.id, "quantity", Number(e.target.value))} />
+                                                            <ShortcutHint show={modifiers.alt && activeRowIndex === index} label="Alt+Q" />
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <Input type="number" min="0" step="0.01" value={row.unit_price || ''} onChange={e => updateCartRow(row.id, "unit_price", Number(e.target.value))} />
+                                                        <TableCell className="relative">
+                                                            <Input ref={el => { priceRefs.current[row.id] = el; }} type="number" min="0" step="0.01" value={row.unit_price || ''} onChange={e => updateCartRow(row.id, "unit_price", Number(e.target.value))} />
+                                                            <ShortcutHint show={modifiers.alt && activeRowIndex === index} label="Alt+U" />
                                                         </TableCell>
                                                         <TableCell className="text-right font-medium text-slate-700">
                                                             {currency}{(Number(row.quantity || 0) * Number(row.unit_price || 0)).toFixed(2)}
@@ -648,7 +800,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                     <div className="flex justify-between items-center">
                                         <h2 className="text-xl font-bold text-slate-800">Over The Counter (OTC) Items</h2>
                                     </div>
-                                    <div className="border rounded-md bg-white shadow-sm overflow-hidden">
+                                    <div className="border rounded-md bg-white shadow-sm">
                                         <Table>
                                             <TableHeader className="bg-slate-50">
                                                 <TableRow>
@@ -663,7 +815,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                             <TableBody>
                                                 {cart.filter(r => r.type === "otc").map((row) => (
                                                     <TableRow key={row.id}>
-                                                        <TableCell>
+                                                        <TableCell className="relative">
                                                             {!row.product_id ? (
                                                                 <Popover open={openProductBox === row.id} onOpenChange={(isOpen) => setOpenProductBox(isOpen ? row.id : null)}>
                                                                     <PopoverTrigger asChild>
@@ -710,7 +862,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                                 </div>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell>
+                                                        <TableCell className="relative">
                                                             <Select value={row.frequency} onValueChange={v => updateCartRow(row.id, "frequency", v)}>
                                                                 <SelectTrigger className="w-[110px] bg-white">
                                                                     <SelectValue placeholder="Freq..." />
@@ -727,11 +879,11 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                                 </SelectContent>
                                                             </Select>
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <Input type="number" min="1" value={row.quantity || ''} onChange={e => updateCartRow(row.id, "quantity", Number(e.target.value))} />
+                                                        <TableCell className="relative">
+                                                            <Input ref={el => { qtyRefs.current[row.id] = el; }} type="number" min="1" value={row.quantity || ''} onChange={e => updateCartRow(row.id, "quantity", Number(e.target.value))} />
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <Input type="number" min="0" step="0.01" value={row.unit_price || ''} onChange={e => updateCartRow(row.id, "unit_price", Number(e.target.value))} />
+                                                        <TableCell className="relative">
+                                                            <Input ref={el => { priceRefs.current[row.id] = el; }} type="number" min="0" step="0.01" value={row.unit_price || ''} onChange={e => updateCartRow(row.id, "unit_price", Number(e.target.value))} />
                                                         </TableCell>
                                                         <TableCell className="text-right font-medium text-slate-700">
                                                             {currency}{(Number(row.quantity || 0) * Number(row.unit_price || 0)).toFixed(2)}
