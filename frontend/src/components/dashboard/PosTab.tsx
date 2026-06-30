@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { ToastAction } from "@/components/ui/toast";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -180,16 +180,6 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        const searchParams = new URLSearchParams(window.location.search);
-        const mobileScan = searchParams.get('mobile_scan');
-        if (mobileScan) {
-            const imgData = localStorage.getItem('mobile_scan_image');
-            if (imgData) {
-                setUploadedImageUrl(imgData);
-            }
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
         // Connect to Socket.io for Real-time AI Webhooks
         const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
         const socketUrl = backendUrl.replace('/api', '');
@@ -221,16 +211,10 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
 
         socketRef.current.on('new_prescription_photo', (data: { photo_url: string }) => {
             console.log("New photo received from mobile");
-            
-            // Store the massive base64 string in localStorage to avoid URI_TOO_LONG error on new tab
-            localStorage.setItem('mobile_scan_image', data.photo_url);
-
+            setUploadedImageUrl(data.photo_url);
             toast({
                 title: 'New Scan Received',
                 description: 'A new prescription image was uploaded from mobile.',
-                action: (
-                    <ToastAction altText="Open Scan" onClick={() => window.open(`${window.location.pathname}?mobile_scan=true`, '_blank')}>Open</ToastAction>
-                ),
             });
         });
 
@@ -811,18 +795,23 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                             {/* Right Panel: Manual Entry Grid */}
                             <div className="md:w-2/3 space-y-6">
                                 {uploadedImageUrl && (
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <h2 className="text-xl font-bold text-slate-800">Prescription Image</h2>
+                                    <details className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm group">
+                                        <summary className="flex justify-between items-center cursor-pointer list-none outline-none">
+                                            <h2 className="text-xl font-bold text-slate-800 flex items-center">
+                                                <span className="mr-2 text-sm text-slate-500 group-open:rotate-90 transition-transform">▶</span>
+                                                Prescription Image Preview
+                                            </h2>
                                             <div className="flex gap-2">
-                                                <Button variant="default" size="sm" onClick={processMobileImage} disabled={isUploadingAi}>
+                                                <Button variant="default" size="sm" onClick={(e) => { e.preventDefault(); processMobileImage(); }} disabled={isUploadingAi}>
                                                     {isUploadingAi ? "Processing..." : "Process AI"}
                                                 </Button>
-                                                <Button variant="ghost" size="sm" onClick={() => setUploadedImageUrl(null)}>Clear Image</Button>
+                                                <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); setUploadedImageUrl(null); }}>Clear Image</Button>
                                             </div>
+                                        </summary>
+                                        <div className="mt-4">
+                                            <img src={uploadedImageUrl} alt="Uploaded Prescription" className="max-h-96 object-contain rounded-md border w-full bg-slate-50" />
                                         </div>
-                                        <img src={uploadedImageUrl} alt="Uploaded Prescription" className="max-h-96 object-contain rounded-md border w-full bg-slate-50" />
-                                    </div>
+                                    </details>
                                 )}
                                 {/* Prescription Section */}
                                 <div className="space-y-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
@@ -1173,8 +1162,8 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                 <img src={uploadedImageUrl} alt="Prescription Preview" className="max-h-full object-contain" />
                             </div>
                         )}
-                        <div className="max-h-[70vh] overflow-y-auto">
-                            <Table>
+                        <div className="max-h-[70vh] overflow-y-auto pb-[180px]">
+                            <Table className="overflow-visible">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-[200px]">Raw Extract (Doctor's Note)</TableHead>
