@@ -93,19 +93,9 @@ export default function Dashboard() {
         toast({ title: 'Processing', description: 'Sending mobile photo to AI...' });
 
         try {
-            const dataURLtoBlob = (dataurl: string) => {
-                const arr = dataurl.split(',');
-                const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
-                const bstr = atob(arr[1]);
-                let n = bstr.length;
-                const u8arr = new Uint8Array(n);
-                while (n--) {
-                    u8arr[n] = bstr.charCodeAt(n);
-                }
-                return new Blob([u8arr], { type: mime });
-            };
-
-            const blob = dataURLtoBlob(photoUrl);
+            const response = await fetch(photoUrl);
+            if (!response.ok) throw new Error("Failed to fetch image from server");
+            const blob = await response.blob();
             const formData = new FormData();
             formData.append('image', blob, 'mobile-upload.jpg');
 
