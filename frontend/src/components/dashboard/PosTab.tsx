@@ -216,12 +216,22 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             });
         });
 
-        socketRef.current.on('new_prescription_photo', (data: any) => {
-            console.log("Mobile Photo Received:", data);
+        socketRef.current.on('new_prescription_photo', (data: { photo_url: string }) => {
+            console.log("New photo received from mobile:", data.photo_url);
+            
+            // Reconstruct absolute URL if the backend sent a relative one
+            let fullUrl = data.photo_url;
+            if (fullUrl.startsWith('/')) {
+                const apiBase = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+                fullUrl = `${apiBase}${fullUrl}`;
+            }
+
             toast({
-                title: "New Mobile Scan",
-                description: "A new prescription image was uploaded from a mobile device.",
-                action: <ToastAction altText="Open Scan" onClick={() => window.open(`${window.location.pathname}?mobile_scan=${encodeURIComponent(data.photo_url)}`, '_blank')}>Open</ToastAction>
+                title: 'New Scan Received',
+                description: 'A new prescription image was uploaded from mobile.',
+                action: (
+                    <ToastAction altText="Open Scan" onClick={() => window.open(`${window.location.pathname}?mobile_scan=${encodeURIComponent(fullUrl)}`, '_blank')}>Open</ToastAction>
+                ),
             });
         });
 
@@ -271,20 +281,10 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
 
         setIsUploadingAi(true);
         try {
-            const token = localStorage.getItem('token');
-            const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-            const response = await fetch(`${backendUrl}/pos/upload-prescription`, {
+            await fetchWithAuth(`/pos/upload-prescription`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
                 body: formData
             });
-
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to process image');
-            }
             toast({ title: 'AI OCR Complete', description: 'Image processed successfully. Loading review screen...' });
         } catch (error: any) {
             toast({ title: 'Upload Failed', description: error.message, variant: 'destructive' });
@@ -309,20 +309,10 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             const formData = new FormData();
             formData.append('image', blob, 'mobile-upload.jpg');
 
-            const token = localStorage.getItem('token');
-            const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-            const uploadResponse = await fetch(`${backendUrl}/pos/upload-prescription`, {
+            await fetchWithAuth(`/pos/upload-prescription`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
                 body: formData
             });
-
-            const data = await uploadResponse.json();
-            if (!uploadResponse.ok) {
-                throw new Error(data.error || 'Failed to process image');
-            }
             toast({ title: 'AI OCR Complete', description: 'Image processed successfully. Loading review screen...' });
         } catch (error: any) {
             toast({ title: 'Upload Failed', description: error.message, variant: 'destructive' });
