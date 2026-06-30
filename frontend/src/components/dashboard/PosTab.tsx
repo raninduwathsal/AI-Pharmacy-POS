@@ -98,6 +98,8 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     const [activeTab, setActiveTab] = useState("sale");
 
     const [isUploadingAi, setIsUploadingAi] = useState(false);
+    const [aiStatusMessage, setAiStatusMessage] = useState<string>("Scanning with AI...");
+    const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -118,6 +120,15 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                 title: "AI Scan Received",
                 description: "A new prescription was just processed by the AI.",
                 variant: "default",
+            });
+        });
+
+        socketRef.current.on('ai_processing_status', (data: any) => {
+            console.log("AI Processing Status:", data);
+            setAiStatusMessage(data.message || "Processing...");
+            toast({
+                title: "AI Status Update",
+                description: data.message || "Processing...",
             });
         });
 
@@ -146,6 +157,10 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        const fileUrl = URL.createObjectURL(file);
+        setUploadedImageUrl(fileUrl);
+        setAiStatusMessage("Uploading and Scanning...");
 
         const formData = new FormData();
         formData.append('image', file);
@@ -292,6 +307,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             setPrescriptionPatientName('');
             setPrescriptionPatientAge('');
             setPendingAiRxId(null);
+            setUploadedImageUrl(null);
             loadHistory();
 
             navigate(`/receipt/${res.invoice_id}`);
@@ -340,6 +356,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             setPrescriptionPatientName('');
             setPrescriptionPatientAge('');
             setPendingAiRxId(null);
+            setUploadedImageUrl(null);
             loadHistory();
 
         } catch (error: any) {
@@ -487,6 +504,15 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
 
                             {/* Right Panel: Manual Entry Grid */}
                             <div className="md:w-2/3 space-y-6">
+                                {uploadedImageUrl && (
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h2 className="text-xl font-bold text-slate-800">Prescription Image</h2>
+                                            <Button variant="ghost" size="sm" onClick={() => setUploadedImageUrl(null)}>Clear Image</Button>
+                                        </div>
+                                        <img src={uploadedImageUrl} alt="Uploaded Prescription" className="max-h-96 object-contain rounded-md border w-full bg-slate-50" />
+                                    </div>
+                                )}
                                 {/* Prescription Section */}
                                 <div className="space-y-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
                                     <div className="flex justify-between items-center">
@@ -495,7 +521,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                             <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleUploadImage} />
                                             <Button variant="outline" className="border-indigo-300 text-indigo-700 hover:bg-indigo-50" onClick={() => fileInputRef.current?.click()} disabled={isUploadingAi}>
                                                 <Zap className={cn("h-4 w-4 mr-2", isUploadingAi ? "animate-pulse text-indigo-400" : "text-indigo-600")} />
-                                                {isUploadingAi ? "Scanning with AI..." : "Upload Rx Image"}
+                                                {isUploadingAi ? aiStatusMessage : "Upload Rx Image"}
                                             </Button>
                                             {aiLines.length > 0 && !aiModalOpen && (
                                                 <Button variant="outline" className="border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100" onClick={() => setAiModalOpen(true)}>
@@ -814,7 +840,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
 
             {/* AI Verification Modal */}
             <Dialog open={aiModalOpen} onOpenChange={setAiModalOpen}>
-                <DialogContent className="max-w-4xl">
+                <DialogContent className={uploadedImageUrl ? "max-w-[95vw] w-full" : "max-w-4xl"}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center text-xl text-purple-800">
                             <Zap className="h-5 w-5 mr-2 text-purple-600" /> AI Prescription Output Verification
@@ -824,8 +850,14 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="py-4 max-h-[60vh] overflow-y-auto">
-                        <Table>
+                    <div className={cn("py-4", uploadedImageUrl ? "grid grid-cols-1 lg:grid-cols-2 gap-6" : "")}>
+                        {uploadedImageUrl && (
+                            <div className="flex flex-col border rounded-lg bg-slate-50 p-2 overflow-hidden items-center justify-center max-h-[70vh]">
+                                <img src={uploadedImageUrl} alt="Prescription Preview" className="max-h-full object-contain" />
+                            </div>
+                        )}
+                        <div className="max-h-[70vh] overflow-y-auto">
+                            <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-[200px]">Raw Extract (Doctor's Note)</TableHead>
@@ -929,6 +961,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                 ))}
                             </TableBody>
                         </Table>
+                        </div>
                     </div>
 
                     <DialogFooter>

@@ -413,11 +413,9 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
 
         const promptText = 'Extract the prescription information from this image. For frequency, strictly use one of these options if possible: OD, BID, TID, QID, Q4H, Q8H, STAT, PRN. For gels or creams, instead of "apply", use "PRN". If you cannot find a total quantity, default total_amount to 1. Return a JSON object ONLY with the following schema: { "patient_name": "string", "patient_age": number, "extracted_lines": [{ "medicine_name_raw": "string", "frequency": "string", "total_amount": number }] }';
         
-        let response;
-        try {
-            console.log("Starting Gemini API call with model gemini-2.5-flash");
-            const ai = new GoogleGenAI({ apiKey: apiKey || fallbackApiKey || '' });
-            response = await ai.models.generateContent({
+        const callGemini = async (key: string) => {
+            const ai = new GoogleGenAI({ apiKey: key });
+            return await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: [
                     {
@@ -429,28 +427,64 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
                     }
                 ]
             });
+        };
+
+        let response;
+        try {
+            console.log("Starting Gemini API call with model gemini-2.5-flash");
+            response = await callGemini(apiKey || fallbackApiKey || '');
             console.log("Gemini API call successful");
         } catch (error: any) {
             console.error("Primary Gemini API call failed:", error?.message || error);
-            if (fallbackApiKey && apiKey) {
-                console.log("Attempting fallback API key...");
+            
+            const is503 = (err: any) => err?.status === 503 || err?.message?.includes('503') || err?.message?.includes('Service Unavailable');
+            
+            if (is503(error) && fallbackApiKey && apiKey) {
+                console.log("503 encountered. Attempting fallback API key...");
                 try {
-                    const fallbackAi = new GoogleGenAI({ apiKey: fallbackApiKey });
-                    response = await fallbackAi.models.generateContent({
-                        model: 'gemini-2.5-flash',
-                    contents: [
-                        {
-                            role: 'user',
-                            parts: [
-                                { inlineData: { data: file.buffer.toString("base64"), mimeType: file.mimetype } },
-                                { text: promptText }
-                            ]
-                        }
-                    ]
-                });
-                console.log("Fallback Gemini API call successful");
+                    response = await callGemini(fallbackApiKey);
+                    console.log("Fallback Gemini API call successful");
                 } catch (fallbackError: any) {
                     console.error("Fallback Gemini API call failed:", fallbackError?.message || fallbackError);
+                    
+                    if (is503(fallbackError)) {
+                        io.emit('ai_processing_status', { message: 'High traffic. Entering exponential backoff retries...' });
+                        
+                        let attempt = 0;
+                        const maxRetries = 3;
+                        let delay = 1000;
+                        let success = false;
+                        
+                        while (attempt < maxRetries) {
+                            attempt++;
+                            console.log(`Exponential backoff attempt ${attempt} in ${delay}ms...`);
+                            await new Promise(res => setTimeout(res, delay));
+                            
+                            try {
+                                response = await callGemini(fallbackApiKey);
+                                console.log(`Exponential backoff attempt ${attempt} successful`);
+                                success = true;
+                                break;
+                            } catch (backoffError: any) {
+                                console.error(`Exponential backoff attempt ${attempt} failed:`, backoffError?.message || backoffError);
+                                if (attempt >= maxRetries) {
+                                    throw new Error('AI service is currently unavailable after multiple retries.');
+                                }
+                                delay *= 2;
+                            }
+                        }
+                        if (!success) {
+                            throw new Error('AI service is currently unavailable after multiple retries.');
+                        }
+                    } else {
+                        throw fallbackError;
+                    }
+                }
+            } else if (fallbackApiKey && apiKey && !is503(error)) {
+                console.log("Non-503 error, attempting fallback API key...");
+                try {
+                    response = await callGemini(fallbackApiKey);
+                } catch (fallbackError: any) {
                     throw fallbackError;
                 }
             } else {
