@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ToastAction } from "@/components/ui/toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -81,12 +82,55 @@ const FrequencyHint = ({ show }: { show: boolean }) => {
     );
 };
 
+function useHistoryState<T>(initialState: T) {
+    const [state, setState] = useState<T>(initialState);
+    const [history, setHistory] = useState<T[]>([]);
+    const [future, setFuture] = useState<T[]>([]);
+
+    const set = (newState: T | ((prev: T) => T), recordHistory = true) => {
+        setState(prev => {
+            const resolved = typeof newState === 'function' ? (newState as any)(prev) : newState;
+            if (recordHistory && JSON.stringify(prev) !== JSON.stringify(resolved)) {
+                setHistory(h => [...h, prev].slice(-50));
+                setFuture([]);
+            }
+            return resolved;
+        });
+    };
+
+    const undo = () => {
+        if (history.length === 0) return;
+        setHistory(prev => {
+            const last = prev[prev.length - 1];
+            setState(current => {
+                setFuture(f => [current, ...f].slice(-50));
+                return last;
+            });
+            return prev.slice(0, -1);
+        });
+    };
+
+    const redo = () => {
+        if (future.length === 0) return;
+        setFuture(prev => {
+            const next = prev[0];
+            setState(current => {
+                setHistory(h => [...h, current].slice(-50));
+                return next;
+            });
+            return prev.slice(1);
+        });
+    };
+
+    return [state, set, undo, redo] as const;
+}
+
 export default function PosTab({ currency = '$', canManageSales = false }: { currency?: string, canManageSales?: boolean }) {
     const { toast } = useToast();
     const navigate = useNavigate();
 
     // -- Cart State --
-    const [cart, setCart] = useState<CartItem[]>([]);
+    const [cart, setCart, undoCart, redoCart] = useHistoryState<CartItem[]>([]);
     const [moneyGiven, setMoneyGiven] = useState<number>(0);
     const [isCheckingOut, setIsCheckingOut] = useState(false);
 
@@ -104,7 +148,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     const [pendingAiRxId, setPendingAiRxId] = useState<number | null>(null);
     const [prescriptionPatientName, setPrescriptionPatientName] = useState<string>('');
     const [prescriptionPatientAge, setPrescriptionPatientAge] = useState<string>('');
-    const [aiLines, setAiLines] = useState<AiExtractedLine[]>([]);
+    const [aiLines, setAiLines, undoAiLines, redoAiLines] = useHistoryState<AiExtractedLine[]>([]);
     const socketRef = useRef<Socket | null>(null);
 
     // AI Mapping State
@@ -121,9 +165,11 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
 
     // Keyboard Navigation State
     const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
+    const [activeAiRowIndex, setActiveAiRowIndex] = useState<number>(0);
     const [modifiers, setModifiers] = useState({ ctrl: false, alt: false, shift: false });
     const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const priceRefs = useRef<Record<string, HTMLInputElement | null>>({});
+    const aiQtyRefs = useRef<Record<number, HTMLInputElement | null>>({});
     const patientNameRef = useRef<HTMLInputElement>(null);
     const patientAgeRef = useRef<HTMLInputElement>(null);
     const moneyGivenRef = useRef<HTMLInputElement>(null);
@@ -134,6 +180,13 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const mobileScan = searchParams.get('mobile_scan');
+        if (mobileScan) {
+            setUploadedImageUrl(mobileScan);
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
         // Connect to Socket.io for Real-time AI Webhooks
         const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
         const socketUrl = backendUrl.replace('/api', '');
@@ -160,6 +213,15 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             toast({
                 title: "AI Status Update",
                 description: data.message || "Processing...",
+            });
+        });
+
+        socketRef.current.on('new_prescription_photo', (data: any) => {
+            console.log("Mobile Photo Received:", data);
+            toast({
+                title: "New Mobile Scan",
+                description: "A new prescription image was uploaded from a mobile device.",
+                action: <ToastAction altText="Open Scan" onClick={() => window.open(`${window.location.pathname}?mobile_scan=${encodeURIComponent(data.photo_url)}`, '_blank')}>Open</ToastAction>
             });
         });
 
@@ -254,7 +316,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
         }
 
         if (changed) {
-            setCart(newCart);
+            setCart(newCart, false);
         }
     }, [cart]);
 
@@ -288,6 +350,65 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                 shift: e.shiftKey
             });
             const isInputFocus = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '');
+            
+            // Undo/Redo
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    if (aiModalOpen) redoAiLines(); else redoCart();
+                } else {
+                    if (aiModalOpen) undoAiLines(); else undoCart();
+                }
+                return;
+            }
+
+            if (aiModalOpen) {
+                if (e.key === 'ArrowDown') {
+                    if (!isInputFocus) {
+                        e.preventDefault();
+                        setActiveAiRowIndex(prev => Math.min(aiLines.length - 1, prev + 1));
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    if (!isInputFocus) {
+                        e.preventDefault();
+                        setActiveAiRowIndex(prev => Math.max(0, prev - 1));
+                    }
+                }
+
+                if (e.altKey && e.key.toLowerCase() === 'd') {
+                    e.preventDefault();
+                    if (activeAiRowIndex >= 0 && activeAiRowIndex < aiLines.length) {
+                        const newLines = [...aiLines];
+                        newLines.splice(activeAiRowIndex, 1);
+                        setAiLines(newLines);
+                        setActiveAiRowIndex(prev => Math.max(0, prev - 1));
+                    }
+                }
+
+                if (activeAiRowIndex >= 0 && activeAiRowIndex < aiLines.length) {
+                    if (e.altKey && e.key.toLowerCase() === 'q') {
+                        e.preventDefault();
+                        aiQtyRefs.current[activeAiRowIndex]?.focus();
+                        aiQtyRefs.current[activeAiRowIndex]?.select();
+                    }
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+                        e.preventDefault();
+                        setOpenAiMapBox(activeAiRowIndex);
+                    }
+                    if (e.shiftKey && !e.ctrlKey && !e.altKey && !isInputFocus) {
+                        const key = e.key.toUpperCase();
+                        const freqMap: Record<string, string> = { 'O': 'OD', 'B': 'BID', 'T': 'TID', 'Q': 'QID', '4': 'Q4H', '8': 'Q8H', 'S': 'STAT', 'P': 'PRN' };
+                        if (freqMap[key]) {
+                            e.preventDefault();
+                            const newLines = [...aiLines];
+                            newLines[activeAiRowIndex].frequency = freqMap[key];
+                            setAiLines(newLines);
+                        }
+                    }
+                }
+                return; // Stop processing further hotkeys for cart
+            }
+
             const rxItems = cart.filter(item => item.type === 'rx');
 
             if (e.key === 'ArrowDown') {
@@ -314,6 +435,14 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                 e.preventDefault();
                 moneyGivenRef.current?.focus();
                 moneyGivenRef.current?.select();
+            }
+
+            if (e.altKey && e.key.toLowerCase() === 'd') {
+                e.preventDefault();
+                if (activeRowIndex >= 0 && activeRowIndex < rxItems.length) {
+                    removeCartRow(rxItems[activeRowIndex].id);
+                    setActiveRowIndex(prev => Math.max(0, prev - 1));
+                }
             }
 
             if (activeRowIndex >= 0 && activeRowIndex < rxItems.length) {
@@ -1031,8 +1160,15 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                             </TableHeader>
                             <TableBody>
                                 {aiLines.map((line, idx) => (
-                                    <TableRow key={idx} className={line.matched_product_id ? "bg-green-50/50" : "bg-amber-50/50"}>
-                                        <TableCell className="font-mono text-xs">{line.medicine_name_raw}</TableCell>
+                                    <TableRow key={idx} className={cn(
+                                        activeAiRowIndex === idx && "bg-indigo-50/80 relative z-[9999]",
+                                        activeAiRowIndex !== idx && line.matched_product_id ? "bg-green-50/50" : "",
+                                        activeAiRowIndex !== idx && !line.matched_product_id ? "bg-amber-50/50" : ""
+                                    )}>
+                                        <TableCell className="font-mono text-xs relative">
+                                            {line.medicine_name_raw}
+                                            {activeAiRowIndex === idx && <FrequencyHint show={modifiers.shift} />}
+                                        </TableCell>
                                         <TableCell>
                                             <Select 
                                                 value={['OD','BID','TID','QID','Q4H','Q8H','STAT','PRN'].includes(line.frequency || '') ? line.frequency : 'Custom'} 
@@ -1070,8 +1206,9 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                 />
                                             )}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="relative">
                                             <Input 
+                                                ref={el => { aiQtyRefs.current[idx] = el; }}
                                                 type="number" 
                                                 min="1" 
                                                 className="h-8 w-16 text-xs bg-white" 
@@ -1082,8 +1219,9 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                     setAiLines(newLines);
                                                 }} 
                                             />
+                                            {activeAiRowIndex === idx && <ShortcutHint show={modifiers.alt} label="Alt+Q" />}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="relative">
                                             <Popover open={openAiMapBox === idx} onOpenChange={(isOpen) => setOpenAiMapBox(isOpen ? idx : null)}>
                                                 <PopoverTrigger asChild>
                                                     <Button variant={line.matched_product_id ? "default" : "outline"} className={cn("w-full justify-between", line.matched_product_id ? "bg-green-600 hover:bg-green-700" : "border-amber-300 text-amber-800")} role="combobox">
@@ -1119,6 +1257,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                                                     </Command>
                                                 </PopoverContent>
                                             </Popover>
+                                            {activeAiRowIndex === idx && <ShortcutHint show={modifiers.ctrl} label="Ctrl+F" />}
                                         </TableCell>
                                     </TableRow>
                                 ))}

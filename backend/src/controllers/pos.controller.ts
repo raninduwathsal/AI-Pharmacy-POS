@@ -594,6 +594,9 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
     }
 };
 
+import fs from 'fs';
+import path from 'path';
+
 export const uploadMobilePrescription = async (req: AuthRequest, res: Response) => {
     try {
         const file = (req as any).file;
@@ -601,12 +604,15 @@ export const uploadMobilePrescription = async (req: AuthRequest, res: Response) 
             return res.status(400).json({ error: 'No image uploaded' });
         }
 
-        const base64Image = file.buffer.toString('base64');
-        const mimeType = file.mimetype;
-        const dataUrl = `data:${mimeType};base64,${base64Image}`;
+        const filename = `${Date.now()}-${file.originalname || 'mobile_upload.jpg'}`;
+        const uploadPath = path.join(__dirname, '../../public/uploads', filename);
+        fs.writeFileSync(uploadPath, file.buffer);
+
+        const backendUrl = process.env.VITE_API_URL ? process.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+        const photoUrl = `${backendUrl}/uploads/${filename}`;
 
         io.emit('new_prescription_photo', {
-            photo_url: dataUrl
+            photo_url: photoUrl
         });
 
         res.status(200).json({ message: "Photo uploaded and sent to web app successfully" });
