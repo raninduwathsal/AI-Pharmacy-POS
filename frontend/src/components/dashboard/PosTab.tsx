@@ -217,20 +217,12 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
         });
 
         socketRef.current.on('new_prescription_photo', (data: { photo_url: string }) => {
-            console.log("New photo received from mobile:", data.photo_url);
-            
-            // Reconstruct absolute URL if the backend sent a relative one
-            let fullUrl = data.photo_url;
-            if (fullUrl.startsWith('/')) {
-                const apiBase = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
-                fullUrl = `${apiBase}${fullUrl}`;
-            }
-
+            console.log("New photo received from mobile");
             toast({
                 title: 'New Scan Received',
                 description: 'A new prescription image was uploaded from mobile.',
                 action: (
-                    <ToastAction altText="Open Scan" onClick={() => window.open(`${window.location.pathname}?mobile_scan=${encodeURIComponent(fullUrl)}`, '_blank')}>Open</ToastAction>
+                    <ToastAction altText="Open Scan" onClick={() => window.open(`${window.location.pathname}?mobile_scan=${encodeURIComponent(data.photo_url)}`, '_blank')}>Open</ToastAction>
                 ),
             });
         });

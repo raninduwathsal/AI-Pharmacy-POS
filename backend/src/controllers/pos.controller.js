@@ -486,42 +486,17 @@ const uploadPrescriptionImage = async (req, res) => {
     }
 };
 exports.uploadPrescriptionImage = uploadPrescriptionImage;
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
 const uploadMobilePrescription = async (req, res) => {
     try {
         const file = req.file;
         if (!file) {
             return res.status(400).json({ error: 'No image uploaded' });
         }
-        const filename = `${Date.now()}-${file.originalname || 'mobile_upload.jpg'}`;
-        const uploadDir = path_1.default.join(__dirname, '../../public/uploads');
-        if (!fs_1.default.existsSync(uploadDir)) {
-            fs_1.default.mkdirSync(uploadDir, { recursive: true });
-        }
-        else {
-            // Lazy cleanup: Delete files older than 1 hour to prevent storage bloat
-            try {
-                const files = fs_1.default.readdirSync(uploadDir);
-                const now = Date.now();
-                files.forEach(f => {
-                    const filePath = path_1.default.join(uploadDir, f);
-                    const stats = fs_1.default.statSync(filePath);
-                    if (now - stats.mtimeMs > 60 * 60 * 1000) { // 1 hour
-                        fs_1.default.unlinkSync(filePath);
-                    }
-                });
-            }
-            catch (cleanupErr) {
-                console.error("Cleanup error:", cleanupErr);
-            }
-        }
-        const uploadPath = path_1.default.join(uploadDir, filename);
-        fs_1.default.writeFileSync(uploadPath, file.buffer);
-        const backendUrl = process.env.VITE_API_URL ? process.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
-        const photoUrl = `${backendUrl}/uploads/${filename}`;
+        const base64Image = file.buffer.toString('base64');
+        const mimeType = file.mimetype;
+        const dataUrl = `data:${mimeType};base64,${base64Image}`;
         server_1.io.emit('new_prescription_photo', {
-            photo_url: photoUrl
+            photo_url: dataUrl
         });
         res.status(200).json({ message: "Photo uploaded and sent to web app successfully" });
     }

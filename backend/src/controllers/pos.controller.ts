@@ -608,9 +608,6 @@ export const uploadPrescriptionImage = async (req: AuthRequest, res: Response) =
     }
 };
 
-import fs from 'fs';
-import path from 'path';
-
 export const uploadMobilePrescription = async (req: AuthRequest, res: Response) => {
     try {
         const file = (req as any).file;
@@ -618,34 +615,12 @@ export const uploadMobilePrescription = async (req: AuthRequest, res: Response) 
             return res.status(400).json({ error: 'No image uploaded' });
         }
 
-        const filename = `${Date.now()}-${file.originalname || 'mobile_upload.jpg'}`;
-        const uploadDir = path.join(__dirname, '../../public/uploads');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        } else {
-            // Lazy cleanup: Delete files older than 1 hour to prevent storage bloat
-            try {
-                const files = fs.readdirSync(uploadDir);
-                const now = Date.now();
-                files.forEach(f => {
-                    const filePath = path.join(uploadDir, f);
-                    const stats = fs.statSync(filePath);
-                    if (now - stats.mtimeMs > 60 * 60 * 1000) { // 1 hour
-                        fs.unlinkSync(filePath);
-                    }
-                });
-            } catch (cleanupErr) {
-                console.error("Cleanup error:", cleanupErr);
-            }
-        }
-        const uploadPath = path.join(uploadDir, filename);
-        fs.writeFileSync(uploadPath, file.buffer);
-
-        // Send a relative path so the frontend can prepend its API_BASE_URL
-        const photoUrl = `/uploads/${filename}`;
+        const base64Image = file.buffer.toString('base64');
+        const mimeType = file.mimetype;
+        const dataUrl = `data:${mimeType};base64,${base64Image}`;
 
         io.emit('new_prescription_photo', {
-            photo_url: photoUrl
+            photo_url: dataUrl
         });
 
         res.status(200).json({ message: "Photo uploaded and sent to web app successfully" });
