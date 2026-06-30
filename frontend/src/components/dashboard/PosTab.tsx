@@ -163,6 +163,16 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
             });
         });
 
+        socketRef.current.on('inventory_alert', (data: any) => {
+            console.log("Inventory Alert Received:", data);
+            setSearchResults({});
+        });
+
+        const handleFocus = () => {
+            setSearchResults({});
+        };
+        window.addEventListener('focus', handleFocus);
+
         if (cart.length === 0) {
             setCart([{ id: crypto.randomUUID(), product_id: null, product_name: "", quantity: 1, unit_price: 0, frequency: "", type: "otc" }]);
         }
@@ -171,6 +181,7 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
 
         return () => {
             socketRef.current?.disconnect();
+            window.removeEventListener('focus', handleFocus);
         };
     }, [historyPage]);
 

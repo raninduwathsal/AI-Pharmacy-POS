@@ -168,13 +168,15 @@ export const confirmCheckout = async (req: AuthRequest, res: Response) => {
             const sellingPrice = item.unit_price;
 
             const [products] = await connection.query<RowDataPacket[]>(
-                `SELECT current_stock FROM Products WHERE product_id = ? FOR UPDATE`,
+                `SELECT current_stock, name FROM Products WHERE product_id = ? FOR UPDATE`,
                 [productId]
             );
 
             if (!products.length || products[0].current_stock < reqQty) {
                 if (!allowOutOfStockSales) {
-                    throw new Error(`Insufficient stock for Product ID ${productId}`);
+                    const productName = products.length ? products[0].name : `Product ID ${productId}`;
+                    const currentStock = products.length ? products[0].current_stock : 0;
+                    throw new Error(`Insufficient stock for ${productName}. Only ${currentStock} remaining.`);
                 }
             }
 
