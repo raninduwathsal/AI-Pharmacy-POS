@@ -427,10 +427,6 @@ export default function PosTab({ currency = '$', canManageSales = false }: { cur
                 e.preventDefault();
                 patientNameRef.current?.focus();
             }
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
-                e.preventDefault();
-                patientAgeRef.current?.focus();
-            }
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
                 e.preventDefault();
                 moneyGivenRef.current?.focus();
